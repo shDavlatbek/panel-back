@@ -5,14 +5,43 @@ set -e
 # Check if database environment variable is set to postgres
 if [ "$DATABASE" = "postgres" ]; then
     echo "Waiting for PostgreSQL..."
+    
+    # Wait for the database to be ready
+    sleep 5
+    
+    # Try simple connection to database to check availability
+    echo "Checking database connection..."
+    python -c "
+import psycopg2
+import time
+import os
 
-    # Wait for database to be ready using pg_isready
-    until pg_isready -h $DB_HOST -p $DB_PORT -U $DB_USER; do
-      echo "PostgreSQL is unavailable - sleeping"
-      sleep 1
-    done
+dbname = os.environ.get('DB_NAME', 'postgres')
+user = os.environ.get('DB_USER', 'postgres')
+password = os.environ.get('DB_PASSWORD', 'postgres')
+host = os.environ.get('DB_HOST', 'db')
+port = os.environ.get('DB_PORT', '5432')
 
-    echo "PostgreSQL is up and running!"
+print(f'Connecting to PostgreSQL at {host}:{port}...')
+
+for i in range(30):
+    try:
+        conn = psycopg2.connect(
+            dbname=dbname,
+            user=user,
+            password=password,
+            host=host,
+            port=port
+        )
+        conn.close()
+        print('PostgreSQL is available!')
+        break
+    except psycopg2.OperationalError as e:
+        print(f'PostgreSQL is unavailable - sleeping ({i+1}/30)')
+        time.sleep(1)
+"
+
+    echo "PostgreSQL is ready!"
 fi
 
 # Apply database migrations
