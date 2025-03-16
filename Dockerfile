@@ -11,8 +11,13 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
+    netcat-traditional \
+    curl \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+# Create symlink for netcat
+RUN ln -sf /bin/nc.traditional /bin/nc
 
 # Install Python dependencies
 COPY requirements.txt .
@@ -25,8 +30,7 @@ COPY . .
 # Collect static files
 RUN python manage.py collectstatic --noinput
 
-# Run entrypoint script
-COPY ./entrypoint.sh .
+# Set proper file permissions
 RUN chmod +x /app/entrypoint.sh
 
 ENTRYPOINT ["/app/entrypoint.sh"] 

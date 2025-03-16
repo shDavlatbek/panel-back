@@ -13,6 +13,12 @@ services:
       - DATABASE=postgres
     depends_on:
       - db
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8300/admin/login/" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
   
   frontend:
     build:
@@ -31,6 +37,12 @@ services:
       - POSTGRES_USER=${DB_USER}
       - POSTGRES_PASSWORD=${DB_PASSWORD}
       - POSTGRES_DB=${DB_NAME}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
   
   nginx:
     image: nginx:stable-alpine

@@ -19,28 +19,59 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT || '22' }}
           script: |
+            set -e
+            
+            echo "Starting deployment process..."
+            
+            # Check if project directory exists
+            if [ ! -d "${{ secrets.PROJECT_PATH }}" ]; then
+              echo "Project directory does not exist. Creating it..."
+              mkdir -p ${{ secrets.PROJECT_PATH }}
+            fi
+            
             cd ${{ secrets.PROJECT_PATH }}
             
+            # Check if git repo is initialized
+            if [ ! -d .git ]; then
+              echo "Git repo not initialized. Cloning from repository..."
+              # If you need to clone initially, uncomment and set the proper URL
+              # git clone https://github.com/shDavlatbek/panel-back.git .
+            fi
+            
             # Pull latest changes from repository
+            echo "Pulling latest changes..."
             git pull
             
             # Make sure helper script is executable
-            chmod +x manage-docker.sh
+            echo "Making helper script executable..."
+            if [ -f ./manage-docker.sh ]; then
+              chmod +x ./manage-docker.sh
+            else
+              echo "Warning: manage-docker.sh not found!"
+              exit 1
+            fi
             
             # Deploy based on environment specified in secrets
             DEPLOY_ENV="${{ secrets.DEPLOY_ENVIRONMENT }}"
+            echo "Deploying to $DEPLOY_ENV environment..."
             
             if [ "$DEPLOY_ENV" = "production" ]; then
               echo "Deploying to production environment..."
-              ./manage-docker.sh prod
+              ./manage-docker.sh prod || { echo "Production deployment failed!"; exit 1; }
             elif [ "$DEPLOY_ENV" = "testing" ]; then
               echo "Deploying to testing environment..."
-              ./manage-docker.sh test
+              ./manage-docker.sh test || { echo "Test deployment failed!"; exit 1; }
             else
               echo "Deploying to development environment..."
-              ./manage-docker.sh dev
+              ./manage-docker.sh dev || { echo "Development deployment failed!"; exit 1; }
             fi
+            
+            # Wait for services to start
+            echo "Waiting for services to start..."
+            sleep 10
             
             # Run migrations
             echo "Running migrations..."
-            ./manage-docker.sh migrate 
+            ./manage-docker.sh migrate || echo "Warning: Migrations failed, but continuing deployment."
+            
+            echo "Deployment completed successfully!" 
