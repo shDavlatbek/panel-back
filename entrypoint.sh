@@ -6,13 +6,13 @@ set -e
 if [ "$DATABASE" = "postgres" ]; then
     echo "Waiting for PostgreSQL..."
 
-    # Wait for database to be ready
-    while ! nc -z $DB_HOST $DB_PORT; do
-      sleep 0.5
-      echo "Still waiting for PostgreSQL..."
+    # Wait for database to be ready using pg_isready
+    until pg_isready -h $DB_HOST -p $DB_PORT -U $DB_USER; do
+      echo "PostgreSQL is unavailable - sleeping"
+      sleep 1
     done
 
-    echo "PostgreSQL started!"
+    echo "PostgreSQL is up and running!"
 fi
 
 # Apply database migrations

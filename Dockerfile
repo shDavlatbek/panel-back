@@ -13,11 +13,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     netcat-traditional \
     curl \
+    postgresql-client \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Create symlink for netcat
-RUN ln -sf /bin/nc.traditional /bin/nc
+# Make sure netcat is available
+RUN which nc.traditional || echo "nc.traditional not found"
+RUN which netcat || echo "netcat not found"
+RUN if [ -f /bin/nc.traditional ]; then ln -sf /bin/nc.traditional /bin/nc; \
+    elif [ -f /usr/bin/nc.traditional ]; then ln -sf /usr/bin/nc.traditional /bin/nc; \
+    else echo "nc.traditional not found in expected locations"; fi
 
 # Install Python dependencies
 COPY requirements.txt .

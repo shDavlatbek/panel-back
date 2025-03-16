@@ -11,13 +11,14 @@ services:
     environment:
       - DATABASE=postgres
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8300/admin/login/" ]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 15s
   
   frontend:
     build:
@@ -31,7 +32,8 @@ services:
     environment:
       - NODE_ENV=development
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
   
   db:
     image: postgres:16
@@ -46,7 +48,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 5s
 
 volumes:
   postgres_data: 
