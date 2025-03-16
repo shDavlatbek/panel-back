@@ -3,7 +3,7 @@ version: '3.8'
 services:
   backend:
     build: .
-    command: gunicorn config.wsgi:application --bind 0.0.0.0:8000
+    command: gunicorn config.wsgi:application --bind 0.0.0.0:8300
     volumes:
       - static_volume:/app/staticfiles
       - media_volume:/app/mediafiles
@@ -30,7 +30,7 @@ services:
       - NODE_ENV=production
   
   db:
-    image: postgres:15
+    image: postgres:16
     volumes:
       - postgres_data_test:/var/lib/postgresql/data/
     environment:

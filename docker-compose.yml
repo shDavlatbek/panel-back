@@ -3,11 +3,11 @@ version: '3.8'
 services:
   backend:
     build: .
-    command: python manage.py runserver 0.0.0.0:8000
+    command: python manage.py runserver 0.0.0.0:8300
     volumes:
       - .:/app
     ports:
-      - "8000:8000"
+      - "8300:8300"
     env_file:
       - ./.env.dev
     environment:
@@ -30,7 +30,7 @@ services:
       - backend
   
   db:
-    image: postgres:15
+    image: postgres:16
     volumes:
       - postgres_data:/var/lib/postgresql/data/
     environment:

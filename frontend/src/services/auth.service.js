@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // API URL configuration
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/auth/';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8300/api/auth/';
 
 // Configure axios to include credentials (cookies)
 axios.defaults.withCredentials = true;

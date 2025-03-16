@@ -16,7 +16,7 @@ This is a Vue.js 3 frontend application for testing the Django REST Framework JW
 ### Prerequisites
 
 - Node.js 16+ and npm
-- Running DRF backend at http://localhost:8000
+- Running DRF backend at http://localhost:8300
 
 ### Installation
 
@@ -36,7 +36,7 @@ The application will be available at http://localhost:5173 by default.
 
 ## Configuration
 
-The API URL is configured in `src/services/auth.service.js`. By default, it points to `http://localhost:8000/api/auth/`. Update this if your backend is running on a different port.
+The API URL is configured in `src/services/auth.service.js`. By default, it points to `http://localhost:8300/api/auth/`. Update this if your backend is running on a different port.
 
 ## Usage
 
