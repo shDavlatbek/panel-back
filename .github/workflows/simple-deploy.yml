@@ -4,16 +4,6 @@ on:
   push:
     branches: [ main, master, develop ]
   workflow_dispatch:
-    inputs:
-      environment:
-        description: 'Environment to deploy to'
-        required: true
-        default: 'development'
-        type: choice
-        options:
-          - development
-          - production
-          - testing
 
 jobs:
   deploy:
@@ -37,11 +27,13 @@ jobs:
             # Make sure helper script is executable
             chmod +x manage-docker.sh
             
-            # Determine which environment to deploy based on workflow input or branch
-            if [ "${{ github.event.inputs.environment }}" = "production" ] || [ "${{ github.ref_name }}" = "main" ] || [ "${{ github.ref_name }}" = "master" ]; then
+            # Deploy based on environment specified in secrets
+            DEPLOY_ENV="${{ secrets.DEPLOY_ENVIRONMENT }}"
+            
+            if [ "$DEPLOY_ENV" = "production" ]; then
               echo "Deploying to production environment..."
               ./manage-docker.sh prod
-            elif [ "${{ github.event.inputs.environment }}" = "testing" ]; then
+            elif [ "$DEPLOY_ENV" = "testing" ]; then
               echo "Deploying to testing environment..."
               ./manage-docker.sh test
             else
