@@ -32,6 +32,7 @@ A Django REST Framework + Vue.js application featuring JWT authentication using 
 │   └── ssl/            # SSL certificates
 ├── docker-compose.yml          # Development docker-compose
 ├── docker-compose.prod.yml     # Production docker-compose
+├── manage-docker.sh            # Helper script for Docker environments
 ├── .env.dev                    # Development environment variables
 ├── .env.prod                   # Production environment variables
 ├── .env.test                   # Testing environment variables
@@ -62,6 +63,12 @@ A Django REST Framework + Vue.js application featuring JWT authentication using 
    ```bash
    docker-compose up -d
    ```
+   
+   Or use the helper script:
+   ```bash
+   chmod +x manage-docker.sh
+   ./manage-docker.sh dev
+   ```
 
 4. Access the services:
    - Backend: http://localhost:8000
@@ -82,13 +89,13 @@ For testing with built frontend and a more production-like environment:
    ```bash
    docker-compose -f docker-compose.prod.yml up -d
    ```
-
-3. Use the app.dev.conf in the nginx configuration to run without SSL:
+   
+   Or use the helper script:
    ```bash
-   cp nginx/conf.d/app.dev.conf nginx/conf.d/default.conf
+   ./manage-docker.sh test
    ```
 
-4. Access the test instance:
+3. Access the test instance:
    - Application: http://localhost
    - API: http://localhost/api/
    - Admin: http://localhost/admin/
@@ -131,10 +138,54 @@ For testing with built frontend and a more production-like environment:
    ```bash
    docker-compose -f docker-compose.prod.yml up -d
    ```
+   
+   Or use the helper script:
+   ```bash
+   ./manage-docker.sh prod
+   ```
 
 5. Access your application:
    - Frontend: https://your-domain.com
    - Admin: https://your-domain.com/admin/
+
+## Helper Script (manage-docker.sh)
+
+This project includes a helper script to manage Docker environments. Make it executable and use it to control your environments:
+
+```bash
+chmod +x manage-docker.sh
+```
+
+Available commands:
+
+| Command | Description |
+|---------|-------------|
+| `./manage-docker.sh dev` | Start development environment |
+| `./manage-docker.sh prod` | Start production environment |
+| `./manage-docker.sh test` | Start test environment |
+| `./manage-docker.sh stop` | Stop all containers |
+| `./manage-docker.sh down` | Stop and remove all containers |
+| `./manage-docker.sh logs` | Show logs |
+| `./manage-docker.sh backup` | Backup the database |
+| `./manage-docker.sh migrate` | Run database migrations |
+| `./manage-docker.sh createsuperuser` | Create a superuser |
+| `./manage-docker.sh help` | Show help information |
+
+Examples:
+
+```bash
+# Start development environment
+./manage-docker.sh dev
+
+# Run database migrations
+./manage-docker.sh migrate
+
+# Create a backup of the database
+./manage-docker.sh backup
+
+# View logs
+./manage-docker.sh logs
+```
 
 ## Environment Variables
 
@@ -225,7 +276,11 @@ Error responses:
 To backup the PostgreSQL database:
 
 ```bash
+# Using Docker commands directly
 docker-compose exec db pg_dump -U postgres panel_back_prod > backup.sql
+
+# Or using the helper script
+./manage-docker.sh backup
 ```
 
 To restore from a backup:
@@ -245,7 +300,11 @@ To update the application:
 
 2. Rebuild and restart the containers:
    ```bash
+   # Using Docker Compose directly
    docker-compose -f docker-compose.prod.yml up -d --build
+   
+   # Or using the helper script
+   ./manage-docker.sh prod
    ```
 
 ## License
