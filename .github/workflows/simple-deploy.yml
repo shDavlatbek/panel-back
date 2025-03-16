@@ -1,0 +1,54 @@
+name: Simple Deployment
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'development'
+        type: choice
+        options:
+          - development
+          - production
+          - testing
+
+jobs:
+  deploy:
+    name: Deploy to Server
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Deploy to Server
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT || '22' }}
+          script: |
+            cd ${{ secrets.PROJECT_PATH }}
+            
+            # Pull latest changes from repository
+            git pull
+            
+            # Make sure helper script is executable
+            chmod +x manage-docker.sh
+            
+            # Determine which environment to deploy based on workflow input or branch
+            if [ "${{ github.event.inputs.environment }}" = "production" ] || [ "${{ github.ref_name }}" = "main" ] || [ "${{ github.ref_name }}" = "master" ]; then
+              echo "Deploying to production environment..."
+              ./manage-docker.sh prod
+            elif [ "${{ github.event.inputs.environment }}" = "testing" ]; then
+              echo "Deploying to testing environment..."
+              ./manage-docker.sh test
+            else
+              echo "Deploying to development environment..."
+              ./manage-docker.sh dev
+            fi
+            
+            # Run migrations
+            echo "Running migrations..."
+            ./manage-docker.sh migrate 
