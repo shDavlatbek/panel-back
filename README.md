@@ -61,7 +61,7 @@ A Django REST Framework + Vue.js application featuring JWT authentication using 
 
 3. Start the development environment:
    ```bash
-   docker-compose up -d
+   docker compose up -d
    ```
    
    Or use the helper script:
@@ -87,7 +87,7 @@ For testing with built frontend and a more production-like environment:
 
 2. Start the test environment:
    ```bash
-   docker-compose -f docker-compose.prod.yml up -d
+   docker compose -f docker-compose.prod.yml up -d
    ```
    
    Or use the helper script:
@@ -136,7 +136,7 @@ For testing with built frontend and a more production-like environment:
 
 4. Start the production environment:
    ```bash
-   docker-compose -f docker-compose.prod.yml up -d
+   docker compose -f docker-compose.prod.yml up -d
    ```
    
    Or use the helper script:
@@ -277,7 +277,7 @@ To backup the PostgreSQL database:
 
 ```bash
 # Using Docker commands directly
-docker-compose exec db pg_dump -U postgres panel_back_prod > backup.sql
+docker compose exec db pg_dump -U postgres panel_back_prod > backup.sql
 
 # Or using the helper script
 ./manage-docker.sh backup
@@ -286,7 +286,7 @@ docker-compose exec db pg_dump -U postgres panel_back_prod > backup.sql
 To restore from a backup:
 
 ```bash
-cat backup.sql | docker-compose exec -T db psql -U postgres panel_back_prod
+cat backup.sql | docker compose exec -T db psql -U postgres panel_back_prod
 ```
 
 ### Updating the Application
@@ -301,7 +301,7 @@ To update the application:
 2. Rebuild and restart the containers:
    ```bash
    # Using Docker Compose directly
-   docker-compose -f docker-compose.prod.yml up -d --build
+   docker compose -f docker-compose.prod.yml up -d --build
    
    # Or using the helper script
    ./manage-docker.sh prod

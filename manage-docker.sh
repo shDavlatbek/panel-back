@@ -28,44 +28,44 @@ fi
 case "$1" in
     dev)
         echo "Starting development environment..."
-        docker-compose up -d
+        docker compose up -d
         ;;
     prod)
         echo "Starting production environment..."
-        docker-compose -f docker-compose.prod.yml up -d
+        docker compose -f docker-compose.prod.yml up -d
         ;;
     test)
         echo "Starting test environment..."
         cp .env.test .env
         cp nginx/conf.d/app.dev.conf nginx/conf.d/default.conf
-        docker-compose -f docker-compose.prod.yml up -d
+        docker compose -f docker-compose.prod.yml up -d
         ;;
     stop)
         echo "Stopping all containers..."
-        docker-compose stop
-        docker-compose -f docker-compose.prod.yml stop
+        docker compose stop
+        docker compose -f docker-compose.prod.yml stop
         ;;
     down)
         echo "Stopping and removing all containers..."
-        docker-compose down
-        docker-compose -f docker-compose.prod.yml down
+        docker compose down
+        docker compose -f docker-compose.prod.yml down
         ;;
     logs)
         echo "Showing logs..."
-        docker-compose logs -f
+        docker compose logs -f
         ;;
     backup)
         echo "Backing up the database..."
-        docker-compose exec db pg_dump -U postgres panel_back_prod > backup-$(date +%Y%m%d%H%M%S).sql
+        docker compose exec db pg_dump -U postgres panel_back_prod > backup-$(date +%Y%m%d%H%M%S).sql
         echo "Backup created: backup-$(date +%Y%m%d%H%M%S).sql"
         ;;
     migrate)
         echo "Running migrations..."
-        docker-compose exec backend python manage.py migrate
+        docker compose exec backend python manage.py migrate
         ;;
     createsuperuser)
         echo "Creating superuser..."
-        docker-compose exec backend python manage.py createsuperuser
+        docker compose exec backend python manage.py createsuperuser
         ;;
     help)
         show_usage
