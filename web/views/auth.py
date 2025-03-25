@@ -1,20 +1,15 @@
-from django.shortcuts import render
 from django.conf import settings
 from django.contrib.auth import authenticate
 from django.middleware import csrf
 from rest_framework import status, permissions
-from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework_simplejwt.views import TokenRefreshView
-from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from datetime import datetime
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
-from .utils import custom_response
-from .error_messages import LOGIN_ERROR_MESSAGES, SUCCESS_MESSAGES, AUTH_ERROR_MESSAGES
+from ..utils import custom_response
+from ..error_messages import LOGIN_ERROR_MESSAGES, SUCCESS_MESSAGES
 
-# Create your views here.
 
 def get_tokens_for_user(user):
     """
@@ -24,6 +19,7 @@ def get_tokens_for_user(user):
     return {
         'refresh': str(refresh),
     }
+
 
 def set_cookie_with_token(response, key, token, expires):
     """
@@ -38,6 +34,7 @@ def set_cookie_with_token(response, key, token, expires):
         samesite=settings.JWT_AUTH_SAMESITE,
     )
 
+
 class LoginView(APIView):
     """
     View for user login - issues refresh token as cookie
@@ -45,6 +42,7 @@ class LoginView(APIView):
     permission_classes = [permissions.AllowAny]
     
     @swagger_auto_schema(
+        tags=['Authorization'],
         operation_description="Foydalanuvchi kirish endpointi",
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
@@ -66,6 +64,13 @@ class LoginView(APIView):
                             type=openapi.TYPE_OBJECT,
                             properties={
                                 'message': openapi.Schema(type=openapi.TYPE_STRING),
+                                'user': openapi.Schema(type=openapi.TYPE_OBJECT, properties={
+                                    'id': openapi.Schema(type=openapi.TYPE_INTEGER),
+                                    'username': openapi.Schema(type=openapi.TYPE_STRING),
+                                    'email': openapi.Schema(type=openapi.TYPE_STRING),
+                                    'first_name': openapi.Schema(type=openapi.TYPE_STRING),
+                                    'last_name': openapi.Schema(type=openapi.TYPE_STRING),
+                                })
                             }
                         ),
                         'detail': openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
@@ -100,9 +105,17 @@ class LoginView(APIView):
         tokens = get_tokens_for_user(user)
         refresh_token = tokens['refresh']
         
+        user_data = {
+            'id': user.id,
+            'username': user.username,
+            'email': user.email,
+            'first_name': user.first_name,
+            'last_name': user.last_name
+        }
+        
         # Prepare response
         response = custom_response(
-            data={'message': SUCCESS_MESSAGES['login'], 'user': user.username},
+            data={'message': SUCCESS_MESSAGES['login'], 'user': user_data},
             status_code=status.HTTP_200_OK
         )
         
@@ -120,6 +133,7 @@ class LoginView(APIView):
         
         return response
 
+
 class LogoutView(APIView):
     """
     View for user logout - clears the refresh token cookie
@@ -127,6 +141,7 @@ class LogoutView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     
     @swagger_auto_schema(
+        tags=['Authorization'],
         operation_description="Foydalanuvchi chiqish endpointi",
         responses={
             200: openapi.Response(
@@ -154,43 +169,4 @@ class LogoutView(APIView):
             status_code=status.HTTP_200_OK
         )
         response.delete_cookie(settings.JWT_AUTH_REFRESH_COOKIE)
-        return response
-
-class TestAuthView(APIView):
-    """
-    Test view to verify authentication is working
-    """
-    permission_classes = [permissions.IsAuthenticated]
-    
-    @swagger_auto_schema(
-        operation_description="Test autentifikatsiya endpointi",
-        responses={
-            200: openapi.Response(
-                description="Autentifikatsiya muvaffaqiyatli",
-                schema=openapi.Schema(
-                    type=openapi.TYPE_OBJECT,
-                    properties={
-                        'status': openapi.Schema(type=openapi.TYPE_INTEGER),
-                        'success': openapi.Schema(type=openapi.TYPE_BOOLEAN),
-                        'result': openapi.Schema(
-                            type=openapi.TYPE_OBJECT,
-                            properties={
-                                'message': openapi.Schema(type=openapi.TYPE_STRING),
-                                'username': openapi.Schema(type=openapi.TYPE_STRING),
-                            }
-                        ),
-                        'detail': openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
-                    }
-                )
-            ),
-            401: "Autentifikatsiya muvaffaqiyatsiz",
-        }
-    )
-    def get(self, request):
-        return custom_response(
-            data={
-                'message': SUCCESS_MESSAGES['authenticated'],
-                'username': request.user.username
-            },
-            status_code=status.HTTP_200_OK
-        )
+        return response 
