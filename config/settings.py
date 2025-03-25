@@ -188,6 +188,12 @@ JWT_AUTH_SAMESITE = 'Lax'
 
 # CORS settings for cookie auth
 CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', 'http://localhost:8080,http://localhost:5173').split(',')
+
+if os.environ.get('DEBUG', 'True') == 'True':
+    CORS_ALLOW_ALL_ORIGINS = True
+else:
+    CORS_ALLOW_ALL_ORIGINS = False
+
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_METHODS = [
     'GET',
