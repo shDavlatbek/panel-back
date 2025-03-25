@@ -14,8 +14,8 @@ urlpatterns = [
     
     # Station endpoints
     path('stations/', StationListView.as_view(), name='stations_list'),
-    path('stations/<str:station_number>/parameter-types/', ParameterTypesByStationView.as_view(), name='parameter_types_by_station'),
-    path('stations/<str:station_number>/parameters/', ParametersByStationView.as_view(), name='parameters_by_station'),
-    path('stations/<str:station_number>/parameter-types/<slug:parameter_type_slug>/parameters/', 
+    path('parameter-types/<str:station_number>/', ParameterTypesByStationView.as_view(), name='parameter_types_by_station'),
+    path('parameters/<str:station_number>/', ParametersByStationView.as_view(), name='parameters_by_station'),
+    path('parameters/<str:station_number>/<slug:parameter_type_slug>/', 
          ParametersByTypeAndStationView.as_view(), name='parameters_by_type_and_station'),
 ] 
