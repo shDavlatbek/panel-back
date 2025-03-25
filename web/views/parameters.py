@@ -14,7 +14,7 @@ class ParameterTypesByStationView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     
     @swagger_auto_schema(
-        tags=['Stations', 'Parameter Types'],
+        tags=['Parameter Types'],
         operation_description="Stansiya raqami bo'yicha parametr turlarini olish",
         manual_parameters=[
             openapi.Parameter(
@@ -107,7 +107,7 @@ class ParametersByStationView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     
     @swagger_auto_schema(
-        tags=['Stations', 'Parameters'],
+        tags=['Parameters'],
         operation_description="Stansiya raqami bo'yicha parametrlarni olish",
         manual_parameters=[
             openapi.Parameter(
@@ -200,7 +200,7 @@ class ParametersByTypeAndStationView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     
     @swagger_auto_schema(
-        tags=['Stations', 'Parameters', 'Parameter Types'],
+        tags=['Parameters', 'Parameter Types'],
         operation_description="Stansiya raqami va parametr turi bo'yicha parametrlarni olish",
         manual_parameters=[
             openapi.Parameter(
