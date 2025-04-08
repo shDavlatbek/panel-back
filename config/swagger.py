@@ -19,6 +19,16 @@ class SwaggerRenderer(SwaggerUIRenderer):
 
 class SwaggerUIView(SchemaView):
     renderer_classes = [SwaggerRenderer, SwaggerYAMLRenderer, SwaggerJSONRenderer, OpenAPIRenderer]
+    
+    def get(self, request, version='', format=None):
+        response = super().get(request, version, format)
+        
+        if hasattr(response, 'data') and 'schemes' in response.data:
+            if 'https' not in response.data['schemes']:
+                response.data['schemes'] = ['http', 'https']
+        
+        return response
+    
     @classmethod
     def without_ui(cls, cache_timeout=0, cache_kwargs=None):
         return cls.as_cached_view(cache_timeout, cache_kwargs, renderer_classes=cls.renderer_classes)
