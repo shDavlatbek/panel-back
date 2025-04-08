@@ -6,7 +6,7 @@ from django.utils.text import slugify
 class Station(models.Model):
     number = models.IntegerField(unique=True)
     name = models.CharField(max_length=250)
-    height = models.FloatField()
+    height = models.FloatField(null=True, blank=True)
     lat = models.FloatField()
     lon = models.FloatField()
     created_at = models.DateTimeField(default=timezone.now)

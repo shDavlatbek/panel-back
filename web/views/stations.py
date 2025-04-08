@@ -35,7 +35,7 @@ class StationListView(APIView):
                                             'id': openapi.Schema(type=openapi.TYPE_INTEGER),
                                             'number': openapi.Schema(type=openapi.TYPE_STRING),
                                             'name': openapi.Schema(type=openapi.TYPE_STRING),
-                                            'address': openapi.Schema(type=openapi.TYPE_STRING),
+                                            'height': openapi.Schema(type=openapi.TYPE_NUMBER, nullable=True),
                                             'lon': openapi.Schema(type=openapi.TYPE_NUMBER),
                                             'lat': openapi.Schema(type=openapi.TYPE_NUMBER),
                                             'created_at': openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATETIME),
@@ -91,7 +91,7 @@ class StationCreateView(APIView):
             properties={
                 'number': openapi.Schema(type=openapi.TYPE_STRING, description="Stansiya raqami"),
                 'name': openapi.Schema(type=openapi.TYPE_STRING, description="Stansiya nomi"),
-                'height': openapi.Schema(type=openapi.TYPE_NUMBER, description="Stansiya balandligi"),
+                'height': openapi.Schema(type=openapi.TYPE_NUMBER, description="Stansiya balandligi", nullable=True),
                 'lon': openapi.Schema(type=openapi.TYPE_NUMBER, description="Longitude koordinatasi"),
                 'lat': openapi.Schema(type=openapi.TYPE_NUMBER, description="Latitude koordinatasi"),
             },
@@ -107,7 +107,7 @@ class StationCreateView(APIView):
                         'result': openapi.Schema(
                             type=openapi.TYPE_OBJECT,
                             properties={
-                                'station': openapi.Schema(
+                                'item': openapi.Schema(
                                     type=openapi.TYPE_OBJECT,
                                     properties={
                                         'id': openapi.Schema(type=openapi.TYPE_INTEGER),
@@ -133,7 +133,7 @@ class StationCreateView(APIView):
     )
     def post(self, request):
         # Validate required fields
-        required_fields = ['number', 'name', 'address', 'lon', 'lat']
+        required_fields = ['number', 'name', 'lon', 'lat']
         for field in required_fields:
             if field not in request.data:
                 return custom_response(
@@ -165,7 +165,7 @@ class StationCreateView(APIView):
         station = Station.objects.create(
             number=request.data['number'],
             name=request.data['name'],
-            address=request.data['address'],
+            height=request.data['height'],
             lon=lon,
             lat=lat
         )
@@ -175,7 +175,7 @@ class StationCreateView(APIView):
             'id': station.id,
             'number': station.number,
             'name': station.name,
-            'address': station.address,
+            'height': station.height,
             'lon': station.lon,
             'lat': station.lat,
             'created_at': station.created_at,
@@ -184,7 +184,7 @@ class StationCreateView(APIView):
         
         return custom_response(
             data={
-                'station': station_data
+                'item': station_data
             },
             status_code=status.HTTP_201_CREATED
         )
@@ -212,7 +212,7 @@ class StationEditView(APIView):
             type=openapi.TYPE_OBJECT,
             properties={
                 'name': openapi.Schema(type=openapi.TYPE_STRING, description="Stansiya nomi"),
-                'address': openapi.Schema(type=openapi.TYPE_STRING, description="Stansiya manzili"),
+                'height': openapi.Schema(type=openapi.TYPE_NUMBER, description="Stansiya balandligi", nullable=True),
                 'lon': openapi.Schema(type=openapi.TYPE_NUMBER, description="Longitude koordinatasi"),
                 'lat': openapi.Schema(type=openapi.TYPE_NUMBER, description="Latitude koordinatasi"),
             },
@@ -234,7 +234,7 @@ class StationEditView(APIView):
                                         'id': openapi.Schema(type=openapi.TYPE_INTEGER),
                                         'number': openapi.Schema(type=openapi.TYPE_STRING),
                                         'name': openapi.Schema(type=openapi.TYPE_STRING),
-                                        'address': openapi.Schema(type=openapi.TYPE_STRING),
+                                        'height': openapi.Schema(type=openapi.TYPE_NUMBER),
                                         'lon': openapi.Schema(type=openapi.TYPE_NUMBER),
                                         'lat': openapi.Schema(type=openapi.TYPE_NUMBER),
                                         'created_at': openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATETIME),
@@ -267,8 +267,8 @@ class StationEditView(APIView):
         if 'name' in request.data:
             station.name = request.data['name']
         
-        if 'address' in request.data:
-            station.address = request.data['address']
+        if 'height' in request.data:
+            station.height = request.data['height']
         
         # Validate and update coordinates if provided
         if 'lon' in request.data or 'lat' in request.data:
@@ -292,7 +292,7 @@ class StationEditView(APIView):
             'id': station.id,
             'number': station.number,
             'name': station.name,
-            'address': station.address,
+            'height': station.height,
             'lon': station.lon,
             'lat': station.lat,
             'created_at': station.created_at,

@@ -53,17 +53,17 @@ fi
 case "$1" in
     dev)
         echo "Starting development environment..."
-        docker compose up -d
+        docker compose up --build -d
         ;;
     prod)
         echo "Starting production environment..."
-        docker compose -f docker-compose.prod.yml up -d
+        docker compose -f docker-compose.prod.yml up --build -d
         ;;
     test)
         echo "Starting test environment..."
         cp .env.test .env
         cp nginx/conf.d/app.dev.conf nginx/conf.d/default.conf
-        docker compose -f docker-compose.test.yml up -d
+        docker compose -f docker-compose.test.yml up --build -d
         ;;
     stop)
         echo "Stopping all containers..."
