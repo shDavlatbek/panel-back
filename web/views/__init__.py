@@ -1,4 +1,4 @@
-from .auth import LoginView, LogoutView
+from .auth import LoginView
 from .users import UserMeView
 from .stations import StationListCreateView, StationDetailUpdateView
 from .parameters import (
@@ -12,7 +12,6 @@ from .map import MapView
 
 __all__ = [
     'LoginView',
-    'LogoutView',
     'UserMeView',
     'StationListCreateView',
     'StationDetailUpdateView',

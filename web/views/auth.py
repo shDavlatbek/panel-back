@@ -45,14 +45,10 @@ class LoginView(APIView):
                         'result': openapi.Schema(
                             type=openapi.TYPE_OBJECT,
                             properties={
+                                'username': openapi.Schema(type=openapi.TYPE_STRING),
+                                'is_admin': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                                'permissions': openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Schema(type=openapi.TYPE_STRING)),
                                 'token': openapi.Schema(type=openapi.TYPE_STRING),
-                                'item': openapi.Schema(type=openapi.TYPE_OBJECT, properties={
-                                    'id': openapi.Schema(type=openapi.TYPE_INTEGER),
-                                    'username': openapi.Schema(type=openapi.TYPE_STRING),
-                                    'email': openapi.Schema(type=openapi.TYPE_STRING),
-                                    'first_name': openapi.Schema(type=openapi.TYPE_STRING),
-                                    'last_name': openapi.Schema(type=openapi.TYPE_STRING),
-                                })
                             }
                         ),
                         'detail': openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
@@ -87,51 +83,18 @@ class LoginView(APIView):
         token = get_token_for_user(user)
         
         user_data = {
-            'id': user.id,
             'username': user.username,
-            'email': user.email,
-            'first_name': user.first_name,
-            'last_name': user.last_name
+            'is_admin': user.is_staff,
+            'permissions': [permission for permission in user.get_all_permissions()]
         }
         
         # Prepare response with token in the body
         response = custom_response(
             data={
-                'user': user_data,
+                **user_data,
                 'token': token
             },
             status_code=status.HTTP_200_OK
         )
         
         return response
-
-
-class LogoutView(APIView):
-    """
-    View for user logout - no longer needs to clear cookies
-    """
-    permission_classes = [permissions.IsAuthenticated]
-    
-    @swagger_auto_schema(
-        tags=['Authorization'],
-        operation_description="Foydalanuvchi chiqish endpointi",
-        responses={
-            200: openapi.Response(
-                description="Chiqish muvaffaqiyatli",
-                schema=openapi.Schema(
-                    type=openapi.TYPE_OBJECT,
-                    properties={
-                        'status': openapi.Schema(type=openapi.TYPE_INTEGER),
-                        'success': openapi.Schema(type=openapi.TYPE_BOOLEAN),
-                        'result': openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
-                        'detail': openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
-                    }
-                )
-            ),
-        }
-    )
-    def post(self, request):
-        response = custom_response(
-            status_code=status.HTTP_200_OK
-        )
-        return response 
