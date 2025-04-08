@@ -24,11 +24,11 @@ class SwaggerUIView(SchemaView):
         response = super().get(request, version, format)
         
         if hasattr(response, 'data') and 'schemes' in response.data:
-            is_secure = request.is_secure()
-            if is_secure:
-                response.data['schemes'] = ['https']
+            scheme = request.scheme
+            if scheme == 'https':
+                response.data['schemes'] = ['https', 'http']
             else:
-                response.data['schemes'] = ['http']
+                response.data['schemes'] = ['http', 'https']
         
         return response
     
