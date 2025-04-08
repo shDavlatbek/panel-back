@@ -25,16 +25,9 @@ class UserMeView(APIView):
                         'result': openapi.Schema(
                             type=openapi.TYPE_OBJECT,
                             properties={
-                                'user': openapi.Schema(
-                                    type=openapi.TYPE_OBJECT,
-                                    properties={
-                                        'id': openapi.Schema(type=openapi.TYPE_INTEGER),
-                                        'username': openapi.Schema(type=openapi.TYPE_STRING),
-                                        'email': openapi.Schema(type=openapi.TYPE_STRING),
-                                        'first_name': openapi.Schema(type=openapi.TYPE_STRING),
-                                        'last_name': openapi.Schema(type=openapi.TYPE_STRING),
-                                    }
-                                )
+                                'username': openapi.Schema(type=openapi.TYPE_STRING),
+                                'is_admin': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                                'permissions': openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Schema(type=openapi.TYPE_STRING)),
                             }
                         ),
                         'detail': openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
@@ -47,16 +40,14 @@ class UserMeView(APIView):
     def get(self, request):
         user = request.user
         user_data = {
-            'id': user.id,
             'username': user.username,
-            'email': user.email,
-            'first_name': user.first_name,
-            'last_name': user.last_name
+            'is_admin': user.is_admin,
+            'permissions': [permission.codename for permission in user.get_all_permissions()]
         }
         
         return custom_response(
             data={
-                'user': user_data
+                **user_data
             },
             status_code=status.HTTP_200_OK
         ) 

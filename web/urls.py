@@ -1,7 +1,7 @@
 from django.urls import path
 from .views import (
     LoginView, LogoutView, UserMeView, 
-    StationListView, StationCreateView, StationEditView, ParameterTypesByStationView, 
+    StationListCreateView, StationDetailUpdateView, ParameterTypesByStationView, 
     ParametersByStationView, ParametersByTypeAndStationView,
     HexGridAPIView, HexagonDataAPIView, MapView
 )
@@ -14,7 +14,8 @@ urlpatterns = [
     path('users/me', UserMeView.as_view(), name='user_me'),
     
     # Station endpoints
-    path('stations', StationListView.as_view(), name='stations_list'),
+    path('stations', StationListCreateView.as_view(), name='stations_list'),
+    path('stations/<str:station_number>', StationDetailUpdateView.as_view(), name='stations_detail'),
     # path('parameter-types/<str:station_number>', ParameterTypesByStationView.as_view(), name='parameter_types_by_station'),
     # path('parameters/<str:station_number>', ParametersByStationView.as_view(), name='parameters_by_station'),
     # path('parameters/<str:station_number>/<slug:parameter_type_slug>', 

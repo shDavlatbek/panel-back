@@ -12,6 +12,9 @@ for /f "tokens=*" %%a in (.env.local) do (
 @REM echo Installing dependencies...
 @REM pip install -r requirements.txt
 
+echo Creating migrations...
+python manage.py makemigrations web
+
 echo Running migrations...
 python manage.py migrate
 

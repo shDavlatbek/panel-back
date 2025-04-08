@@ -1,6 +1,6 @@
 from .auth import LoginView, LogoutView
 from .users import UserMeView
-from .stations import StationListView, StationCreateView, StationEditView
+from .stations import StationListCreateView, StationDetailUpdateView
 from .parameters import (
     ParameterTypesByStationView,
     ParametersByStationView,
@@ -14,9 +14,8 @@ __all__ = [
     'LoginView',
     'LogoutView',
     'UserMeView',
-    'StationListView',
-    'StationCreateView',
-    'StationEditView',
+    'StationListCreateView',
+    'StationDetailUpdateView',
     'ParameterTypesByStationView',
     'ParametersByStationView',
     'ParametersByTypeAndStationView',

@@ -7,9 +7,9 @@ from ..error_messages import VALIDATION_ERROR_MESSAGES, AUTH_ERROR_MESSAGES
 from ..models import Station
 
 
-class StationListView(APIView):
+class StationListCreateView(APIView):
     """
-    View for retrieving all stations
+    View for retrieving all stations and creating new stations
     """
     permission_classes = [permissions.IsAuthenticated]
     
@@ -74,13 +74,6 @@ class StationListView(APIView):
             },
             status_code=status.HTTP_200_OK
         )
-
-
-class StationCreateView(APIView):
-    """
-    View for creating a new station
-    """
-    permission_classes = [permissions.IsAuthenticated]
     
     @swagger_auto_schema(
         tags=['Stations'],
@@ -165,7 +158,7 @@ class StationCreateView(APIView):
         station = Station.objects.create(
             number=request.data['number'],
             name=request.data['name'],
-            height=request.data['height'],
+            height=request.data.get('height'),
             lon=lon,
             lat=lat
         )
@@ -190,11 +183,87 @@ class StationCreateView(APIView):
         )
 
 
-class StationEditView(APIView):
+class StationDetailUpdateView(APIView):
     """
-    View for updating an existing station
+    View for retrieving and updating an existing station
     """
     permission_classes = [permissions.IsAuthenticated]
+    
+    @swagger_auto_schema(
+        tags=['Stations'],
+        operation_description="Stansiya ma'lumotlarini olish",
+        manual_parameters=[
+            openapi.Parameter(
+                'station_number',
+                openapi.IN_PATH,
+                description="Stansiya raqami",
+                type=openapi.TYPE_STRING,
+                required=True
+            )
+        ],
+        responses={
+            200: openapi.Response(
+                description="Stansiya ma'lumotlari muvaffaqiyatli olindi",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'status': openapi.Schema(type=openapi.TYPE_INTEGER),
+                        'success': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                        'result': openapi.Schema(
+                            type=openapi.TYPE_OBJECT,
+                            properties={
+                                'item': openapi.Schema(
+                                    type=openapi.TYPE_OBJECT,
+                                    properties={
+                                        'id': openapi.Schema(type=openapi.TYPE_INTEGER),
+                                        'number': openapi.Schema(type=openapi.TYPE_STRING),
+                                        'name': openapi.Schema(type=openapi.TYPE_STRING),
+                                        'height': openapi.Schema(type=openapi.TYPE_NUMBER),
+                                        'lon': openapi.Schema(type=openapi.TYPE_NUMBER),
+                                        'lat': openapi.Schema(type=openapi.TYPE_NUMBER),
+                                        'created_at': openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATETIME),
+                                        'updated_at': openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATETIME)
+                                    }
+                                )
+                            }
+                        ),
+                        'detail': openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
+                    }
+                )
+            ),
+            401: "Autentifikatsiya muvaffaqiyatsiz",
+            404: "Stansiya topilmadi",
+        }
+    )
+    def get(self, request, station_number):
+        # Check if station exists
+        try:
+            station = Station.objects.get(number=station_number)
+        except Station.DoesNotExist:
+            return custom_response(
+                detail=AUTH_ERROR_MESSAGES['not_found'].format(item="Stansiya"),
+                status_code=status.HTTP_404_NOT_FOUND,
+                success=False
+            )
+        
+        # Prepare response
+        station_data = {
+            'id': station.id,
+            'number': station.number,
+            'name': station.name,
+            'height': station.height,
+            'lon': station.lon,
+            'lat': station.lat,
+            'created_at': station.created_at,
+            'updated_at': station.updated_at
+        }
+        
+        return custom_response(
+            data={
+                'item': station_data
+            },
+            status_code=status.HTTP_200_OK
+        )
     
     @swagger_auto_schema(
         tags=['Stations'],
