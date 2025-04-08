@@ -10,9 +10,10 @@ const authStore = useAuthStore();
     <header>
       <div class="wrapper">
         <nav>
-          <RouterLink to="/" class="logo">JWT Auth Demo</RouterLink>
+          <RouterLink to="/" class="logo">AQI Dashboard</RouterLink>
           <div class="nav-links">
             <RouterLink to="/">Home</RouterLink>
+            <RouterLink v-if="authStore.isLoggedIn" to="/map">Map</RouterLink>
             <RouterLink v-if="!authStore.isLoggedIn" to="/login">Login</RouterLink>
             <a v-if="authStore.isLoggedIn" href="#" @click.prevent="authStore.logout">Logout</a>
           </div>

@@ -1,43 +1,25 @@
 from django.conf import settings
 from django.contrib.auth import authenticate
-from django.middleware import csrf
 from rest_framework import status, permissions
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
-from datetime import datetime
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from ..utils import custom_response
-from ..error_messages import LOGIN_ERROR_MESSAGES, SUCCESS_MESSAGES
+from ..error_messages import LOGIN_ERROR_MESSAGES
 
 
-def get_tokens_for_user(user):
+def get_token_for_user(user):
     """
-    Get or create refresh token for user
+    Get or create a single token for user
     """
     refresh = RefreshToken.for_user(user)
-    return {
-        'refresh': str(refresh),
-    }
-
-
-def set_cookie_with_token(response, key, token, expires):
-    """
-    Helper function to set cookies with tokens
-    """
-    response.set_cookie(
-        key=key,
-        value=token,
-        expires=expires,
-        secure=settings.JWT_AUTH_SECURE,
-        httponly=settings.JWT_AUTH_HTTPONLY,
-        samesite=settings.JWT_AUTH_SAMESITE,
-    )
+    return str(refresh.access_token)
 
 
 class LoginView(APIView):
     """
-    View for user login - issues refresh token as cookie
+    View for user login - returns a single token in response
     """
     permission_classes = [permissions.AllowAny]
     
@@ -63,8 +45,8 @@ class LoginView(APIView):
                         'result': openapi.Schema(
                             type=openapi.TYPE_OBJECT,
                             properties={
-                                'message': openapi.Schema(type=openapi.TYPE_STRING),
-                                'user': openapi.Schema(type=openapi.TYPE_OBJECT, properties={
+                                'token': openapi.Schema(type=openapi.TYPE_STRING),
+                                'item': openapi.Schema(type=openapi.TYPE_OBJECT, properties={
                                     'id': openapi.Schema(type=openapi.TYPE_INTEGER),
                                     'username': openapi.Schema(type=openapi.TYPE_STRING),
                                     'email': openapi.Schema(type=openapi.TYPE_STRING),
@@ -101,9 +83,8 @@ class LoginView(APIView):
                 success=False
             )
         
-        # Generate tokens
-        tokens = get_tokens_for_user(user)
-        refresh_token = tokens['refresh']
+        # Generate token
+        token = get_token_for_user(user)
         
         user_data = {
             'id': user.id,
@@ -113,22 +94,13 @@ class LoginView(APIView):
             'last_name': user.last_name
         }
         
-        # Prepare response
+        # Prepare response with token in the body
         response = custom_response(
-            data={'message': SUCCESS_MESSAGES['login'], 'user': user_data},
+            data={
+                'user': user_data,
+                'token': token
+            },
             status_code=status.HTTP_200_OK
-        )
-        
-        # Set CSRF token in cookie
-        csrf.get_token(request)
-        
-        # Set refresh token in cookie
-        refresh_expiration = datetime.now() + settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME']
-        set_cookie_with_token(
-            response=response,
-            key=settings.JWT_AUTH_REFRESH_COOKIE,
-            token=refresh_token,
-            expires=refresh_expiration
         )
         
         return response
@@ -136,7 +108,7 @@ class LoginView(APIView):
 
 class LogoutView(APIView):
     """
-    View for user logout - clears the refresh token cookie
+    View for user logout - no longer needs to clear cookies
     """
     permission_classes = [permissions.IsAuthenticated]
     
@@ -151,12 +123,7 @@ class LogoutView(APIView):
                     properties={
                         'status': openapi.Schema(type=openapi.TYPE_INTEGER),
                         'success': openapi.Schema(type=openapi.TYPE_BOOLEAN),
-                        'result': openapi.Schema(
-                            type=openapi.TYPE_OBJECT,
-                            properties={
-                                'message': openapi.Schema(type=openapi.TYPE_STRING),
-                            }
-                        ),
+                        'result': openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
                         'detail': openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
                     }
                 )
@@ -165,8 +132,6 @@ class LogoutView(APIView):
     )
     def post(self, request):
         response = custom_response(
-            data={'message': SUCCESS_MESSAGES['logout']},
             status_code=status.HTTP_200_OK
         )
-        response.delete_cookie(settings.JWT_AUTH_REFRESH_COOKIE)
         return response 

@@ -59,10 +59,10 @@ frontend/*.sw?
 .vscode/
 *.swp
 *.swo
-
+staticfiles/
 # OS specific
 .DS_Store
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local 
+# .env.local
+# .env.development.local
+# .env.test.local
+# .env.production.local 

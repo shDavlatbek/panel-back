@@ -6,6 +6,9 @@ from .parameters import (
     ParametersByStationView,
     ParametersByTypeAndStationView
 )
+from .hexgrid import HexGridAPIView
+from .hexdata import HexagonDataAPIView
+from .map import MapView
 
 __all__ = [
     'LoginView',
@@ -17,4 +20,7 @@ __all__ = [
     'ParameterTypesByStationView',
     'ParametersByStationView',
     'ParametersByTypeAndStationView',
+    'HexGridAPIView',
+    'HexagonDataAPIView',
+    'MapView',
 ] 

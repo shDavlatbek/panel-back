@@ -1,0 +1,178 @@
+<div class="field-map-container">
+    <!-- Hidden textarea that will hold the coordinates -->
+    <div class="textarea-container">
+        {% include "django/forms/widgets/textarea.html" %}
+    </div>
+    
+    <!-- The map widget -->
+    <div class="field-map">
+        <div id="{{ map_id }}" class="admin-map-widget"></div>
+        <div id="{{ display_id }}" class="coordinates-display"></div>
+    </div>
+</div>
+
+<script type="text/javascript">
+    document.addEventListener('DOMContentLoaded', function() {
+        var mapDiv = document.getElementById('{{ map_id }}');
+        var coordsField = document.getElementById('{{ widget.attrs.id }}');
+        var displayDiv = document.getElementById('{{ display_id }}');
+        
+        // Initialize the map
+        var map = L.map(mapDiv, {
+            center: [0,0],  // Default to NYC
+            zoom: 1
+        });
+        
+        // Add base layer
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+        
+        // Create FeatureGroup to store drawn items
+        var drawnItems = new L.FeatureGroup();
+        map.addLayer(drawnItems);
+        
+        // Add draw control
+        var drawControl = new L.Control.Draw({
+            draw: {
+                polyline: false,
+                circle: false,
+                rectangle: false,
+                marker: false,
+                circlemarker: false,
+                polygon: {
+                    allowIntersection: false,
+                    drawError: {
+                        color: '#e1e100',
+                        message: '<strong>Error:</strong> Polygon edges cannot cross!'
+                    },
+                    shapeOptions: {
+                        color: '#3388ff',
+                        weight: 2
+                    }
+                }
+            },
+            edit: {
+                featureGroup: drawnItems,
+                remove: true
+            }
+        });
+        map.addControl(drawControl);
+        
+        // Handle existing data
+        if (coordsField.value) {
+            try {
+                var coords = JSON.parse(coordsField.value);
+                if (coords && coords.length > 0) {
+                    // Create a polygon from the saved coordinates
+                    var polygon = L.polygon(coords.map(function(point) {
+                        return [point[1], point[0]]; // Convert [lng, lat] to [lat, lng] for Leaflet
+                    }), {
+                        color: '#3388ff',
+                        weight: 2
+                    });
+                    
+                    drawnItems.addLayer(polygon);
+                    map.fitBounds(polygon.getBounds());
+                    
+                    updateCoordinatesDisplay(coords);
+                }
+            } catch (e) {
+                console.error('Error parsing coordinates:', e);
+            }
+        }
+        
+        // Handle new drawings
+        map.on(L.Draw.Event.CREATED, function(e) {
+            // Remove existing polygons
+            drawnItems.clearLayers();
+            
+            // Add the new polygon
+            var layer = e.layer;
+            drawnItems.addLayer(layer);
+            
+            // Extract coordinates and save them
+            var latLngs = layer.getLatLngs()[0];
+            var coords = latLngs.map(function(latlng) {
+                return [latlng.lng, latlng.lat]; // Store as [lng, lat]
+            });
+            
+            // Close the polygon if needed
+            if (coords.length > 0 && 
+                (coords[0][0] !== coords[coords.length-1][0] || 
+                 coords[0][1] !== coords[coords.length-1][1])) {
+                coords.push(coords[0]);
+            }
+            
+            // Update the form field
+            coordsField.value = JSON.stringify(coords);
+            
+            // Update the display
+            updateCoordinatesDisplay(coords);
+        });
+        
+        // Handle edited polygons
+        map.on(L.Draw.Event.EDITED, function(e) {
+            var layers = e.layers;
+            
+            layers.eachLayer(function(layer) {
+                var latLngs = layer.getLatLngs()[0];
+                var coords = latLngs.map(function(latlng) {
+                    return [latlng.lng, latlng.lat]; // Store as [lng, lat]
+                });
+                
+                // Close the polygon if needed
+                if (coords.length > 0 && 
+                    (coords[0][0] !== coords[coords.length-1][0] || 
+                     coords[0][1] !== coords[coords.length-1][1])) {
+                    coords.push(coords[0]);
+                }
+                
+                // Update the form field
+                coordsField.value = JSON.stringify(coords);
+                
+                // Update the display
+                updateCoordinatesDisplay(coords);
+            });
+        });
+        
+        // Handle deleted polygons
+        map.on(L.Draw.Event.DELETED, function() {
+            coordsField.value = '';
+            displayDiv.innerHTML = '<p>No polygon defined</p>';
+        });
+        
+        // Update the coordinates display
+        function updateCoordinatesDisplay(coords) {
+            if (!coords || coords.length === 0) {
+                displayDiv.innerHTML = '<p>No polygon defined</p>';
+                return;
+            }
+            
+            var html = '<p><strong>Polygon Coordinates:</strong></p>';
+            html += '<table class="coords-table">';
+            html += '<tr><th>Point</th><th>Longitude</th><th>Latitude</th></tr>';
+            
+            for (var i = 0; i < coords.length; i++) {
+                html += '<tr>';
+                html += '<td>' + (i + 1) + '</td>';
+                html += '<td>' + coords[i][0].toFixed(6) + '</td>';
+                html += '<td>' + coords[i][1].toFixed(6) + '</td>';
+                html += '</tr>';
+            }
+            
+            html += '</table>';
+            displayDiv.innerHTML = html;
+        }
+        
+        // Initialize the display
+        if (!coordsField.value) {
+            displayDiv.innerHTML = '<p>No polygon defined</p>';
+        }
+        
+        // Force map to render correctly (sometimes needed in admin context)
+        setTimeout(function() {
+            map.invalidateSize();
+        }, 100);
+    });
+</script> 

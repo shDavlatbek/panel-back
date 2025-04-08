@@ -21,6 +21,12 @@
         </div>
         
         <div class="action-section">
+          <h3>AQI Map</h3>
+          <p>View the Air Quality Index map with IDW interpolation.</p>
+          <router-link to="/map" class="btn btn-success">Go to Map</router-link>
+        </div>
+        
+        <div class="action-section">
           <h3>Authentication Test</h3>
           <p>Test your authentication status by making a request to a protected endpoint.</p>
           <button 
@@ -153,6 +159,11 @@ h3 {
 
 .btn-danger {
   background-color: #e03131;
+  color: white;
+}
+
+.btn-success {
+  background-color: #2b8a3e;
   color: white;
 }
 

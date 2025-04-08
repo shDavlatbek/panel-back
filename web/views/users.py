@@ -3,7 +3,6 @@ from rest_framework.views import APIView
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from ..utils import custom_response
-from ..error_messages import SUCCESS_MESSAGES
 
 
 class UserMeView(APIView):
@@ -57,7 +56,6 @@ class UserMeView(APIView):
         
         return custom_response(
             data={
-                'message': SUCCESS_MESSAGES['user_profile'],
                 'user': user_data
             },
             status_code=status.HTTP_200_OK

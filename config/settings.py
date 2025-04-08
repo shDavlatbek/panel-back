@@ -33,6 +33,8 @@ ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost 127.0.0.1 [::1
 # Application definition
 
 INSTALLED_APPS = [
+    'jazzmin',
+    
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -59,7 +61,6 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'web.middleware.JWTCookieMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -67,7 +68,7 @@ ROOT_URLCONF = 'config.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [os.path.join(BASE_DIR, 'templates')],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -138,6 +139,9 @@ USE_TZ = False
 
 STATIC_URL = 'static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, 'static'),
+]
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'mediafiles')
 
@@ -149,7 +153,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Django REST Framework settings
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'web.authentication.CustomJWTAuthentication',
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
@@ -159,9 +163,9 @@ REST_FRAMEWORK = {
 
 # JWT settings
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': None,  # No access token
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=int(os.environ.get('JWT_REFRESH_TOKEN_LIFETIME_DAYS', 30))),
-    'ROTATE_REFRESH_TOKENS': True,
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=int(os.environ.get('JWT_TOKEN_LIFETIME_DAYS', 30))),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=365),  # Set a valid lifetime but we won't use refresh tokens
+    'ROTATE_REFRESH_TOKENS': False,
     'UPDATE_LAST_LOGIN': True,
     
     'ALGORITHM': 'HS256',
@@ -179,18 +183,11 @@ SIMPLE_JWT = {
     'JTI_CLAIM': 'jti',
     
     'SLIDING_TOKEN_REFRESH_EXP_CLAIM': 'refresh_exp',
-    'SLIDING_TOKEN_LIFETIME': None,
-    'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=int(os.environ.get('JWT_REFRESH_TOKEN_LIFETIME_DAYS', 30))),
+    'SLIDING_TOKEN_LIFETIME': timedelta(days=int(os.environ.get('JWT_TOKEN_LIFETIME_DAYS', 30))),
+    'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=365),  # Set a valid lifetime but we won't use refresh tokens
 }
 
-# Cookie settings for JWT
-JWT_AUTH_COOKIE = 'jwt-auth'
-JWT_AUTH_REFRESH_COOKIE = 'auth-token'
-JWT_AUTH_SECURE = not DEBUG
-JWT_AUTH_HTTPONLY = True
-JWT_AUTH_SAMESITE = 'Lax'
-
-# CORS settings for cookie auth
+# CORS settings
 CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', 'http://localhost:8080,http://localhost:5173').split(',')
 
 if os.environ.get('DEBUG', 'True') == 'True':
@@ -218,9 +215,11 @@ SWAGGER_SETTINGS = {
             'in': 'header',
         },
     },
+    'PERSISTAUTH': True,
     'SECURITY_REQUIREMENTS': [{'Bearer': []}],
     'USE_SESSION_AUTH': False,
-    'TAGS_SORTER': None,
+    'DEFAULT_MODEL_RENDERING': 'example',
+    'DOC_EXPANSION': 'none',
 }
 
 # Logging configuration

@@ -1,0 +1,85 @@
+.admin-map-widget {
+    width: 100%;
+    height: 600px;
+    margin-bottom: 20px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+/* Container for the entire map widget */
+.field-map-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    width: 100%;
+}
+
+/* Container for the textarea */
+.textarea-container {
+    width: 100%;
+    margin-bottom: 10px;
+}
+
+/* By default, hide the textarea since we're using the map */
+.textarea-container textarea {
+    display: none;
+}
+
+/* Add styles for the field-map container to make it full-width */
+.field-map {
+    width: 100%;
+    display: block;
+    margin-bottom: 20px;
+}
+
+/* Make the textarea and map display in a row format */
+.field-coordinates {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    width: 100%;
+}
+
+.field-coordinates .textarea {
+    width: 100%;
+    margin-bottom: 10px;
+}
+
+.coordinates-display {
+    margin-top: 10px;
+    padding: 10px;
+    background-color: #f5f5f5;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    overflow-x: auto;
+}
+
+.coords-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+
+.coords-table th, .coords-table td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+}
+
+.coords-table th {
+    background-color: #f2f2f2;
+}
+
+.coords-table tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+
+.field-coordinates .help {
+    margin-bottom: 15px;
+}
+
+@media (min-width: 992px) {
+    .admin-map-widget {
+        height: 700px;
+    }
+} 

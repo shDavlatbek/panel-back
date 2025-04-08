@@ -3,7 +3,7 @@ from rest_framework.views import APIView
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from ..utils import custom_response
-from ..error_messages import SUCCESS_MESSAGES, VALIDATION_ERROR_MESSAGES, AUTH_ERROR_MESSAGES
+from ..error_messages import VALIDATION_ERROR_MESSAGES, AUTH_ERROR_MESSAGES
 from ..models import Station
 
 
@@ -27,8 +27,7 @@ class StationListView(APIView):
                         'result': openapi.Schema(
                             type=openapi.TYPE_OBJECT,
                             properties={
-                                'message': openapi.Schema(type=openapi.TYPE_STRING),
-                                'stations': openapi.Schema(
+                                'items': openapi.Schema(
                                     type=openapi.TYPE_ARRAY,
                                     items=openapi.Schema(
                                         type=openapi.TYPE_OBJECT,
@@ -62,7 +61,7 @@ class StationListView(APIView):
                 'id': station.id,
                 'number': station.number,
                 'name': station.name,
-                'address': station.address,
+                'height': station.height,
                 'lon': station.lon,
                 'lat': station.lat,
                 'created_at': station.created_at,
@@ -71,8 +70,7 @@ class StationListView(APIView):
         
         return custom_response(
             data={
-                'message': SUCCESS_MESSAGES['stations_list'],
-                'stations': stations_data
+                'items': stations_data
             },
             status_code=status.HTTP_200_OK
         )
@@ -89,11 +87,11 @@ class StationCreateView(APIView):
         operation_description="Yangi stansiya qo'shish",
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
-            required=['number', 'name', 'address', 'lon', 'lat'],
+            required=['number', 'name', 'height', 'lon', 'lat'],
             properties={
                 'number': openapi.Schema(type=openapi.TYPE_STRING, description="Stansiya raqami"),
                 'name': openapi.Schema(type=openapi.TYPE_STRING, description="Stansiya nomi"),
-                'address': openapi.Schema(type=openapi.TYPE_STRING, description="Stansiya manzili"),
+                'height': openapi.Schema(type=openapi.TYPE_NUMBER, description="Stansiya balandligi"),
                 'lon': openapi.Schema(type=openapi.TYPE_NUMBER, description="Longitude koordinatasi"),
                 'lat': openapi.Schema(type=openapi.TYPE_NUMBER, description="Latitude koordinatasi"),
             },
@@ -109,14 +107,13 @@ class StationCreateView(APIView):
                         'result': openapi.Schema(
                             type=openapi.TYPE_OBJECT,
                             properties={
-                                'message': openapi.Schema(type=openapi.TYPE_STRING),
                                 'station': openapi.Schema(
                                     type=openapi.TYPE_OBJECT,
                                     properties={
                                         'id': openapi.Schema(type=openapi.TYPE_INTEGER),
                                         'number': openapi.Schema(type=openapi.TYPE_STRING),
                                         'name': openapi.Schema(type=openapi.TYPE_STRING),
-                                        'address': openapi.Schema(type=openapi.TYPE_STRING),
+                                        'height': openapi.Schema(type=openapi.TYPE_NUMBER),
                                         'lon': openapi.Schema(type=openapi.TYPE_NUMBER),
                                         'lat': openapi.Schema(type=openapi.TYPE_NUMBER),
                                         'created_at': openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATETIME),
@@ -148,7 +145,7 @@ class StationCreateView(APIView):
         # Check if station with this number already exists
         if Station.objects.filter(number=request.data['number']).exists():
             return custom_response(
-                detail=SUCCESS_MESSAGES['station_exists'].format(number=request.data['number']),
+                detail=AUTH_ERROR_MESSAGES['station_exists'].format(number=request.data['number']),
                 status_code=status.HTTP_409_CONFLICT,
                 success=False
             )
@@ -187,7 +184,6 @@ class StationCreateView(APIView):
         
         return custom_response(
             data={
-                'message': SUCCESS_MESSAGES['station_created'],
                 'station': station_data
             },
             status_code=status.HTTP_201_CREATED
@@ -232,8 +228,7 @@ class StationEditView(APIView):
                         'result': openapi.Schema(
                             type=openapi.TYPE_OBJECT,
                             properties={
-                                'message': openapi.Schema(type=openapi.TYPE_STRING),
-                                'station': openapi.Schema(
+                                'item': openapi.Schema(
                                     type=openapi.TYPE_OBJECT,
                                     properties={
                                         'id': openapi.Schema(type=openapi.TYPE_INTEGER),
@@ -306,8 +301,7 @@ class StationEditView(APIView):
         
         return custom_response(
             data={
-                'message': SUCCESS_MESSAGES['station_updated'],
-                'station': station_data
+                'item': station_data
             },
             status_code=status.HTTP_200_OK
         ) 

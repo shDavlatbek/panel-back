@@ -15,7 +15,7 @@ class AuthService {
    */
   login(username, password) {
     return axios
-      .post(API_URL + 'login/', {
+      .post(API_URL + 'login', {
         username,
         password
       })
@@ -33,7 +33,7 @@ class AuthService {
    */
   logout() {
     localStorage.removeItem('user');
-    return axios.post(API_URL + 'logout/').then(response => {
+    return axios.post(API_URL + 'logout').then(response => {
       return response.data;
     });
   }
@@ -43,7 +43,7 @@ class AuthService {
    * @returns {Promise} - Response promise
    */
   testAuth() {
-    return axios.get(API_URL + 'test/').then(response => {
+    return axios.get(API_URL + 'test').then(response => {
       return response.data;
     });
   }

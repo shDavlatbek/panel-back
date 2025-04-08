@@ -3,7 +3,7 @@ from rest_framework.views import APIView
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from ..utils import custom_response
-from ..error_messages import SUCCESS_MESSAGES, AUTH_ERROR_MESSAGES
+from ..error_messages import AUTH_ERROR_MESSAGES
 from ..models import Station, ParameterType, Parameter
 
 
@@ -36,7 +36,6 @@ class ParameterTypesByStationView(APIView):
                         'result': openapi.Schema(
                             type=openapi.TYPE_OBJECT,
                             properties={
-                                'message': openapi.Schema(type=openapi.TYPE_STRING),
                                 'station': openapi.Schema(
                                     type=openapi.TYPE_OBJECT,
                                     properties={
@@ -89,7 +88,6 @@ class ParameterTypesByStationView(APIView):
         
         return custom_response(
             data={
-                'message': SUCCESS_MESSAGES['parameter_types_list'],
                 'station': {
                     'number': station.number,
                     'name': station.name
@@ -129,7 +127,6 @@ class ParametersByStationView(APIView):
                         'result': openapi.Schema(
                             type=openapi.TYPE_OBJECT,
                             properties={
-                                'message': openapi.Schema(type=openapi.TYPE_STRING),
                                 'station': openapi.Schema(
                                     type=openapi.TYPE_OBJECT,
                                     properties={
@@ -182,7 +179,6 @@ class ParametersByStationView(APIView):
         
         return custom_response(
             data={
-                'message': SUCCESS_MESSAGES['parameters_list'],
                 'station': {
                     'number': station.number,
                     'name': station.name
@@ -229,7 +225,6 @@ class ParametersByTypeAndStationView(APIView):
                         'result': openapi.Schema(
                             type=openapi.TYPE_OBJECT,
                             properties={
-                                'message': openapi.Schema(type=openapi.TYPE_STRING),
                                 'station': openapi.Schema(
                                     type=openapi.TYPE_OBJECT,
                                     properties={
@@ -290,7 +285,6 @@ class ParametersByTypeAndStationView(APIView):
         
         return custom_response(
             data={
-                'message': SUCCESS_MESSAGES['parameters_by_type_list'],
                 'station': {
                     'number': station.number,
                     'name': station.name

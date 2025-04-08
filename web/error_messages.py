@@ -24,19 +24,3 @@ LOGIN_ERROR_MESSAGES = {
     'invalid_credentials': 'Login yoki parol noto\'g\'ri',
     'missing_fields': 'Iltimos, foydalanuvchi nomi va parolni kiriting',
 }
-
-# Success messages
-SUCCESS_MESSAGES = {
-    'login': 'Kirish muvaffaqiyatli',
-    'logout': 'Chiqish muvaffaqiyatli',
-    'token_refresh': 'Token yangilandi',
-    'authenticated': 'Autentifikatsiya muvaffaqiyatli',
-    'user_profile': 'Foydalanuvchi ma\'lumotlari muvaffaqiyatli olindi',
-    'stations_list': 'Stansiyalar ro\'yxati muvaffaqiyatli olindi',
-    'parameter_types_list': 'Parametr turlari ro\'yxati muvaffaqiyatli olindi',
-    'parameters_list': 'Parametrlar ro\'yxati muvaffaqiyatli olindi',
-    'parameters_by_type_list': 'Berilgan turdagi parametrlar ro\'yxati muvaffaqiyatli olindi',
-    'station_created': 'Stansiya muvaffaqiyatli yaratildi',
-    'station_updated': 'Stansiya muvaffaqiyatli tahrirlandi',
-    'station_exists': '{number} raqamli stansiya allaqachon mavjud',
-} 
