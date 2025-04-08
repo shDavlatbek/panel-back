@@ -41,8 +41,8 @@ class UserMeView(APIView):
         user = request.user
         user_data = {
             'username': user.username,
-            'is_admin': user.is_admin,
-            'permissions': [permission.codename for permission in user.get_all_permissions()]
+            'is_admin': user.is_staff,
+            'permissions': [permission for permission in user.get_all_permissions()]
         }
         
         return custom_response(
