@@ -373,4 +373,52 @@ class StationDetailUpdateView(APIView):
                 'item': station_data
             },
             status_code=status.HTTP_200_OK
+        )
+    
+    @swagger_auto_schema(
+        tags=['Stations'],
+        operation_description="Stansiyani o'chirish",
+        manual_parameters=[
+            openapi.Parameter(
+                'station_number',
+                openapi.IN_PATH,
+                description="Stansiya raqami",
+                type=openapi.TYPE_STRING,
+                required=True
+            )
+        ],
+        responses={
+            204: openapi.Response(
+                description="Stansiya muvaffaqiyatli o'chirildi",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'status': openapi.Schema(type=openapi.TYPE_INTEGER),
+                        'success': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                        'result': openapi.Schema(type=openapi.TYPE_OBJECT),
+                        'detail': openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
+                    }
+                )
+            ),
+            401: "Autentifikatsiya muvaffaqiyatsiz",
+            404: "Stansiya topilmadi",
+        }
+    )
+    def delete(self, request, station_number):
+        # Check if station exists
+        try:
+            station = Station.objects.get(number=station_number)
+        except Station.DoesNotExist:
+            return custom_response(
+                detail=AUTH_ERROR_MESSAGES['not_found'].format(item="Stansiya"),
+                status_code=status.HTTP_404_NOT_FOUND,
+                success=False
+            )
+        
+        # Delete the station
+        station.delete()
+        
+        # Return success response with no content
+        return custom_response(
+            status_code=status.HTTP_204_NO_CONTENT
         ) 

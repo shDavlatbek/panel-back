@@ -9,6 +9,7 @@ AUTH_ERROR_MESSAGES = {
     'user_not_found': 'Foydalanuvchi topilmadi',
     'user_inactive': 'Foydalanuvchi faol emas',
     'not_found': '{item} topilmadi',
+    'station_exists': '{number} raqamli stansiya allaqachon mavjud',
 }
 
 # Validation error messages

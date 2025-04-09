@@ -18,13 +18,6 @@ services:
       retries: 3
       start_period: 20s
   
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    depends_on:
-      - backend
-  
   db:
     image: postgres:16
     volumes:
@@ -48,7 +41,6 @@ services:
       - media_volume:/usr/share/nginx/media
     depends_on:
       - backend
-      - frontend
 
 volumes:
   postgres_data_prod:
