@@ -16,10 +16,10 @@ class Station(models.Model):
         return f"{self.name} ({self.number})"
     
     @property
-    def parameter_types(self):
-        return ParameterType.objects.filter(parameters__station=self).distinct()
+    def parameter_names(self):
+        return ParameterName.objects.filter(parameters__station=self).distinct()
 
-class ParameterType(models.Model):
+class ParameterName(models.Model):
     name = models.CharField(max_length=250)
     slug = models.SlugField(max_length=250, unique=True)
     unit = models.CharField(max_length=250)
@@ -34,7 +34,7 @@ class ParameterType(models.Model):
 
 class Parameter(models.Model):
     station = models.ForeignKey('Station', on_delete=models.CASCADE, related_name='parameters')
-    parameter_type = models.ForeignKey('ParameterType', on_delete=models.CASCADE, related_name='parameters')
+    parameter_name = models.ForeignKey('ParameterName', on_delete=models.CASCADE, related_name='parameters')
     datetime = models.DateTimeField()
     value = models.FloatField()
 

@@ -3,6 +3,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Variables to store map data
     let hexLayer = null;
     let loadingIndicator = null;
+    let currentParameterName = 'temp'; // Default parameter to display
     
     // Create the map centered at a default location (will adjust to data)
     const map = L.map('map').setView([40.7128, -74.0060], 10); // Default to NYC coordinates
@@ -23,11 +24,11 @@ document.addEventListener('DOMContentLoaded', function() {
         const grades = [0, 50, 100, 150, 200, 300];
         const labels = ['Good', 'Moderate', 'Unhealthy for Sensitive Groups', 'Unhealthy', 'Very Unhealthy', 'Hazardous'];
         
-        div.innerHTML = '<h4>AQI Legend</h4>';
+        div.innerHTML = '<h4>Parameter Legend</h4>';
         
-        // Loop through our AQI intervals and generate a label with a colored square for each interval
+        // Loop through our value intervals and generate a label with a colored square for each interval
         for (let i = 0; i < grades.length; i++) {
-            const color = getAQIColor(grades[i] + 1);
+            const color = getValueColor(grades[i] + 1);
             div.innerHTML +=
                 '<div class="legend-item">' +
                 '<div class="color-box" style="background:' + color + '"></div> ' +
@@ -45,7 +46,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Leaflet expects [lat, lng] format for coordinates
         return L.circleMarker([station.lat, station.lon], {
             radius: 8,
-            fillColor: getAQIColor(station.aqi_value || station.aqi),
+            fillColor: getValueColor(station.parameter_value || 0),
             color: '#000',
             weight: 1,
             opacity: 1,
@@ -53,40 +54,40 @@ document.addEventListener('DOMContentLoaded', function() {
         }).bindPopup(`
             <div class="station-tooltip">
                 <div class="station-name">${station.name}</div>
-                <div class="aqi-value">AQI: ${station.aqi_value || station.aqi} (${getAQIDescription(station.aqi_value || station.aqi)})</div>
+                <div class="parameter-value">${currentParameterName}: ${station.parameter_value || 'N/A'} (${getValueDescription(station.parameter_value || 0)})</div>
                 <div>Location: [${station.lat}, ${station.lon}]</div>
             </div>
         `);
     }
     
-    // Helper function to get AQI color
-    function getAQIColor(aqi) {
-        if(aqi <= 50){
+    // Helper function to get color based on parameter value
+    function getValueColor(value) {
+        if(value <= 50){
             return 'rgba(159, 211, 92, 1)'
-          }else if(aqi > 50 && aqi <= 100){
+          }else if(value > 50 && value <= 100){
             return 'rgba(247, 213, 67, 1)'
-          }else if(aqi > 100 && aqi <= 150){
+          }else if(value > 100 && value <= 150){
             return 'rgba(236, 142, 79, 1)'
-          }else if(aqi > 150 && aqi < 200){
+          }else if(value > 150 && value < 200){
             return 'rgba(233, 95, 94, 1)'
-          }else if(aqi >= 200 && aqi <= 300){
+          }else if(value >= 200 && value <= 300){
             return 'rgba(145, 104, 161, 1)'
-          }else if(aqi > 300){
+          }else if(value > 300){
             return 'rgba(157, 104, 120, 1)'
           }
     }
     
-    // Helper function to get AQI description
-    function getAQIDescription(aqi) {
-        if (aqi <= 50) {
+    // Helper function to get description based on parameter value
+    function getValueDescription(value) {
+        if (value <= 50) {
             return 'Good';
-        } else if (aqi <= 100) {
+        } else if (value <= 100) {
             return 'Moderate';
-        } else if (aqi <= 150) {
+        } else if (value <= 150) {
             return 'Unhealthy for Sensitive Groups';
-        } else if (aqi <= 200) {
+        } else if (value <= 200) {
             return 'Unhealthy';
-        } else if (aqi <= 300) {
+        } else if (value <= 300) {
             return 'Very Unhealthy';
         } else {
             return 'Hazardous';
@@ -130,7 +131,8 @@ document.addEventListener('DOMContentLoaded', function() {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken')
+                'X-CSRFToken': getCookie('csrftoken'),
+                'Authorization': 'Bearer ' + getCookie('token')
             }
         })
         .then(response => {
@@ -140,21 +142,23 @@ document.addEventListener('DOMContentLoaded', function() {
             return response.json();
         })
         .then(geojson => {
+            geojson = geojson.result;
             console.log('Received hexgrid:', geojson);
-            if (!geojson || !geojson.result.features || geojson.result.features.length === 0) {
+            if (!geojson || !geojson.features || geojson.features.length === 0) {
                 console.warn('No hexagons returned from server');
                 hideLoading();
                 showErrorMessage('No hexagons could be generated. Please define an area in the admin interface.');
                 return Promise.reject(new Error('No hexagons returned'));
             }
             
-            // Now load the hexagon data using GET
-            return fetch('/api/hexdata', {
+            // Now load the hexagon data using GET with the current parameter
+            return fetch(`/api/hexdata?parameter_name=${currentParameterName}`, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': getCookie('csrftoken')
-                }
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'Authorization': 'Bearer ' + getCookie('token')
+                },
             })
             .then(response => {
                 if (!response.ok) {
@@ -163,11 +167,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 return response.json();
             })
             .then(hexData => {
+                hexData = hexData.result;
                 console.log('Received hex data:', hexData);
                 if (!hexData || hexData.length === 0) {
                     console.warn('No hex data returned from server');
                     hideLoading();
-                    showErrorMessage('No data could be interpolated. Check if there are AQI stations available.');
+                    showErrorMessage('No data could be interpolated. Check if there are stations with parameter data available.');
                     return;
                 }
                 
@@ -182,8 +187,15 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Fetch AQI station data from the API
-    fetch('/api/stations')
+    // Fetch station data from the API
+    fetch(`/api/stations`, {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken'),
+            'Authorization': 'Bearer ' + getCookie('token')
+        }
+    })
         .then(response => {
             if (!response.ok) {
                 throw new Error(`Failed to fetch stations: ${response.status} ${response.statusText}`);
@@ -191,13 +203,13 @@ document.addEventListener('DOMContentLoaded', function() {
             return response.json();
         })
         .then(stations => {
-            stations = stations.result.stations;
+            stations = stations.result.items;
 
             console.log('Fetched stations:', stations);
             // If no data, show a message
             if (stations.length === 0) {
                 console.warn('No station data available');
-                showErrorMessage('No AQI station data available. Please add some stations first.');
+                showErrorMessage('No station data available. Please add some stations first.');
                 return;
             }
             
@@ -226,14 +238,14 @@ document.addEventListener('DOMContentLoaded', function() {
             };
             
             const overlays = {
-                "AQI Stations": stationLayer
+                "Weather Stations": stationLayer
             };
             
             L.control.layers(baseLayers, overlays).addTo(map);
         })
         .catch(error => {
-            console.error('Error fetching AQI data:', error);
-            showErrorMessage('Error loading AQI data. Please try again later.');
+            console.error('Error fetching station data:', error);
+            showErrorMessage('Error loading station data. Please try again later.');
         });
     
     // Function to show error messages on the map
@@ -270,22 +282,22 @@ document.addEventListener('DOMContentLoaded', function() {
         hexLayer = L.geoJSON(geojson, {
             style: function(feature) {
                 const hexId = feature.properties.hex_id;
-                const hexData = hexDataMap[hexId] || { color: '#cccccc' };
+                const hexData = hexDataMap[hexId];
                 
                 return {
-                    fillColor: getAQIColor(hexData.aqi) || '#cccccc',
-                    weight: 0,  // Increased for better visibility
+                    fillColor: getValueColor(hexData?.value || 0),
+                    weight: 0,  // Border weight
                     opacity: 0,
                     color: '#000',  // Border color
-                    fillOpacity: 0.5  // Increased for better visibility
+                    fillOpacity: 0.5  // Fill opacity
                 };
             },
             onEachFeature: function(feature, layer) {
                 const hexId = feature.properties.hex_id;
                 const hexData = hexDataMap[hexId];
                 
-                if (hexData) {
-                    layer.bindTooltip(hexData.aqi.toFixed(1), {
+                if (hexData && hexData.value !== undefined) {
+                    layer.bindTooltip(`${currentParameterName}: ${hexData.value.toFixed(2)}`, {
                         direction: "top",
                         offset: [0, 0]
                       });
@@ -319,4 +331,37 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         return cookieValue;
     }
+    
+    // Create parameter selector control
+    const parameterControl = L.control({position: 'topright'});
+    
+    parameterControl.onAdd = function(map) {
+        const div = L.DomUtil.create('div', 'info parameter-control');
+        div.innerHTML = `
+            <h4>Select Parameter</h4>
+            <select id="parameter-select">
+                <option value="temp">Temperature</option>
+                <option value="wind-speed">Wind Speed</option>
+                <option value="pressure">Pressure</option>
+                <option value="humidity">Humidity</option>
+                <option value="rainfall">Rainfall</option>
+                <option value="ef-temp">Effective Temperature</option>
+                <option value="wind-direction">Wind Direction</option>
+            </select>
+        `;
+        return div;
+    };
+    
+    parameterControl.addTo(map);
+    
+    // Add event listener to parameter selector
+    setTimeout(() => {
+        const parameterSelect = document.getElementById('parameter-select');
+        if (parameterSelect) {
+            parameterSelect.addEventListener('change', function() {
+                currentParameterName = this.value;
+                loadAreaData(); // Reload data with the new parameter
+            });
+        }
+    }, 1000); // Small delay to ensure the DOM is ready
 }); 

@@ -1,9 +1,10 @@
 from django.urls import path
 from .views import (
     LoginView, UserMeView, 
-    StationListCreateView, StationDetailUpdateView, ParameterTypesByStationView, 
-    ParametersByStationView, ParametersByTypeAndStationView,
-    HexGridAPIView, HexagonDataAPIView, MapView
+    StationView, StationDetailView, ParameterNameView, 
+    ParametersByStationView, ParametersByNameAndStationView,
+    HexGridAPIView, HexagonDataAPIView, MapView,
+    ParameterScrapeView
 )
 
 app_name = 'web'
@@ -13,16 +14,17 @@ urlpatterns = [
     path('users/me', UserMeView.as_view(), name='user_me'),
     
     # Station endpoints
-    path('stations', StationListCreateView.as_view(), name='stations_list'),
-    path('stations/<str:station_number>', StationDetailUpdateView.as_view(), name='stations_detail'),
-    # path('parameter-types/<str:station_number>', ParameterTypesByStationView.as_view(), name='parameter_types_by_station'),
-    # path('parameters/<str:station_number>', ParametersByStationView.as_view(), name='parameters_by_station'),
-    # path('parameters/<str:station_number>/<slug:parameter_type_slug>', 
-    #      ParametersByTypeAndStationView.as_view(), name='parameters_by_type_and_station'),
+    path('stations', StationView.as_view(), name='stations_list'),
+    path('stations/<str:station_number>', StationDetailView.as_view(), name='stations_detail'),
+    path('parameter-names', ParameterNameView.as_view(), name='parameter_names'),
+    path('parameters/<str:station_number>', ParametersByStationView.as_view(), name='parameters_by_station'),
+    path('parameters/<str:station_number>/<slug:parameter_name_slug>', 
+         ParametersByNameAndStationView.as_view(), name='parameters_by_name_and_station'),
+    path('parameters/scrape', ParameterScrapeView.as_view(), name='parameters_scrape'),
          
     # # Hex grid and data endpoints
-    # path('hexgrid', HexGridAPIView.as_view(), name='hex-grid'),
-    # path('hexdata', HexagonDataAPIView.as_view(), name='hex-data'),
+    path('hexgrid', HexGridAPIView.as_view(), name='hex-grid'),
+    path('hexdata', HexagonDataAPIView.as_view(), name='hex-data'),
     
     # Map view
     path('map/', MapView.as_view(), name='map-view'),

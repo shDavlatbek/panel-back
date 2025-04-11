@@ -1,10 +1,11 @@
 from .auth import LoginView
 from .users import UserMeView
-from .stations import StationListCreateView, StationDetailUpdateView
+from .stations import StationView, StationDetailView
 from .parameters import (
-    ParameterTypesByStationView,
+    ParameterScrapeView,
+    ParameterNameView,
     ParametersByStationView,
-    ParametersByTypeAndStationView
+    ParametersByNameAndStationView
 )
 from .hexgrid import HexGridAPIView
 from .hexdata import HexagonDataAPIView
@@ -13,11 +14,12 @@ from .map import MapView
 __all__ = [
     'LoginView',
     'UserMeView',
-    'StationListCreateView',
-    'StationDetailUpdateView',
-    'ParameterTypesByStationView',
+    'StationView',
+    'StationDetailView',
+    'ParameterScrapeView',
+    'ParameterNameView',
     'ParametersByStationView',
-    'ParametersByTypeAndStationView',
+    'ParametersByNameAndStationView',
     'HexGridAPIView',
     'HexagonDataAPIView',
     'MapView',

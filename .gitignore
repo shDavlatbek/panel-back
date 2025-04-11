@@ -60,6 +60,7 @@ frontend/*.sw?
 *.swp
 *.swo
 staticfiles/
+venv/
 # OS specific
 .DS_Store
 .env.local

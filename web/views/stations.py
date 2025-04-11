@@ -3,11 +3,11 @@ from rest_framework.views import APIView
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from ..utils import custom_response
-from ..error_messages import VALIDATION_ERROR_MESSAGES, AUTH_ERROR_MESSAGES
+from ..error_messages import VALIDATION_ERROR_MESSAGES, AUTH_ERROR_MESSAGES, STATION_ERROR_MESSAGES
 from ..models import Station
 
 
-class StationListCreateView(APIView):
+class StationView(APIView):
     """
     View for retrieving all stations and creating new stations
     """
@@ -49,7 +49,7 @@ class StationListCreateView(APIView):
                     }
                 )
             ),
-            401: "Autentifikatsiya muvaffaqiyatsiz",
+            401: f"Unauthorized: {AUTH_ERROR_MESSAGES['not_authenticated']}",
         }
     )
     def get(self, request):
@@ -119,9 +119,10 @@ class StationListCreateView(APIView):
                     }
                 )
             ),
-            400: "Noto'g'ri so'rov parametrlari",
-            401: "Autentifikatsiya muvaffaqiyatsiz",
-            409: "Ushbu raqamli stansiya allaqachon mavjud",
+            400: f"Bad Request: {STATION_ERROR_MESSAGES['missing_field']} or {STATION_ERROR_MESSAGES['invalid_coordinates']}",
+            401: f"Unauthorized: {AUTH_ERROR_MESSAGES['not_authenticated']}",
+            409: f"Conflict: {STATION_ERROR_MESSAGES['already_exists']}",
+            500: f"Internal Server Error: {STATION_ERROR_MESSAGES['creation_failed']}"
         }
     )
     def post(self, request):
@@ -130,7 +131,7 @@ class StationListCreateView(APIView):
         for field in required_fields:
             if field not in request.data:
                 return custom_response(
-                    detail=VALIDATION_ERROR_MESSAGES['required'].format(field=field),
+                    detail=STATION_ERROR_MESSAGES['missing_field'].format(field=field),
                     status_code=status.HTTP_400_BAD_REQUEST,
                     success=False
                 )
@@ -138,7 +139,7 @@ class StationListCreateView(APIView):
         # Check if station with this number already exists
         if Station.objects.filter(number=request.data['number']).exists():
             return custom_response(
-                detail=AUTH_ERROR_MESSAGES['station_exists'].format(number=request.data['number']),
+                detail=STATION_ERROR_MESSAGES['already_exists'].format(number=request.data['number']),
                 status_code=status.HTTP_409_CONFLICT,
                 success=False
             )
@@ -147,43 +148,50 @@ class StationListCreateView(APIView):
         try:
             lon = float(request.data['lon'])
             lat = float(request.data['lat'])
-        except (ValueError, TypeError):
+        except (ValueError, TypeError) as e:
             return custom_response(
-                detail=VALIDATION_ERROR_MESSAGES['invalid'].format(field='Koordinatalar'),
+                detail=STATION_ERROR_MESSAGES['invalid_coordinates'].format(error=str(e)),
                 status_code=status.HTTP_400_BAD_REQUEST,
                 success=False
             )
         
-        # Create new station
-        station = Station.objects.create(
-            number=request.data['number'],
-            name=request.data['name'],
-            height=request.data.get('height'),
-            lon=lon,
-            lat=lat
-        )
-        
-        # Prepare response
-        station_data = {
-            'id': station.id,
-            'number': station.number,
-            'name': station.name,
-            'height': station.height,
-            'lon': station.lon,
-            'lat': station.lat,
-            'created_at': station.created_at,
-            'updated_at': station.updated_at
-        }
-        
-        return custom_response(
-            data={
-                'item': station_data
-            },
-            status_code=status.HTTP_201_CREATED
-        )
+        try:
+            # Create new station
+            station = Station.objects.create(
+                number=request.data['number'],
+                name=request.data['name'],
+                height=request.data.get('height'),
+                lon=lon,
+                lat=lat
+            )
+            
+            # Prepare response
+            station_data = {
+                'id': station.id,
+                'number': station.number,
+                'name': station.name,
+                'height': station.height,
+                'lon': station.lon,
+                'lat': station.lat,
+                'created_at': station.created_at,
+                'updated_at': station.updated_at
+            }
+            
+            return custom_response(
+                data={
+                    'item': station_data
+                },
+                status_code=status.HTTP_201_CREATED
+            )
+        except Exception as e:
+            return custom_response(
+                detail=STATION_ERROR_MESSAGES['creation_failed'].format(error=str(e)),
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                success=False
+            )
 
 
-class StationDetailUpdateView(APIView):
+class StationDetailView(APIView):
     """
     View for retrieving and updating an existing station
     """
@@ -231,8 +239,8 @@ class StationDetailUpdateView(APIView):
                     }
                 )
             ),
-            401: "Autentifikatsiya muvaffaqiyatsiz",
-            404: "Stansiya topilmadi",
+            401: f"Unauthorized: {AUTH_ERROR_MESSAGES['not_authenticated']}",
+            404: f"Not Found: {STATION_ERROR_MESSAGES['not_found']}"
         }
     )
     def get(self, request, station_number):
@@ -241,7 +249,7 @@ class StationDetailUpdateView(APIView):
             station = Station.objects.get(number=station_number)
         except Station.DoesNotExist:
             return custom_response(
-                detail=AUTH_ERROR_MESSAGES['not_found'].format(item="Stansiya"),
+                detail=STATION_ERROR_MESSAGES['not_found'].format(number=station_number),
                 status_code=status.HTTP_404_NOT_FOUND,
                 success=False
             )
@@ -316,9 +324,9 @@ class StationDetailUpdateView(APIView):
                     }
                 )
             ),
-            400: "Noto'g'ri so'rov parametrlari",
-            401: "Autentifikatsiya muvaffaqiyatsiz",
-            404: "Stansiya topilmadi",
+            400: f"Bad Request: {VALIDATION_ERROR_MESSAGES['invalid'].format(field='Koordinatalar')}",
+            401: f"Unauthorized: {AUTH_ERROR_MESSAGES['not_authenticated']}",
+            404: f"Not Found: {STATION_ERROR_MESSAGES['not_found']}"
         }
     )
     def put(self, request, station_number):
@@ -327,7 +335,7 @@ class StationDetailUpdateView(APIView):
             station = Station.objects.get(number=station_number)
         except Station.DoesNotExist:
             return custom_response(
-                detail=AUTH_ERROR_MESSAGES['not_found'].format(item="Stansiya"),
+                detail=STATION_ERROR_MESSAGES['not_found'].format(number=station_number),
                 status_code=status.HTTP_404_NOT_FOUND,
                 success=False
             )
@@ -388,20 +396,9 @@ class StationDetailUpdateView(APIView):
             )
         ],
         responses={
-            204: openapi.Response(
-                description="Stansiya muvaffaqiyatli o'chirildi",
-                schema=openapi.Schema(
-                    type=openapi.TYPE_OBJECT,
-                    properties={
-                        'status': openapi.Schema(type=openapi.TYPE_INTEGER),
-                        'success': openapi.Schema(type=openapi.TYPE_BOOLEAN),
-                        'result': openapi.Schema(type=openapi.TYPE_OBJECT),
-                        'detail': openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
-                    }
-                )
-            ),
-            401: "Autentifikatsiya muvaffaqiyatsiz",
-            404: "Stansiya topilmadi",
+            204: "Stansiya muvaffaqiyatli o'chirildi",
+            401: f"Unauthorized: {AUTH_ERROR_MESSAGES['not_authenticated']}",
+            404: f"Not Found: {STATION_ERROR_MESSAGES['not_found']}"
         }
     )
     def delete(self, request, station_number):
@@ -410,7 +407,7 @@ class StationDetailUpdateView(APIView):
             station = Station.objects.get(number=station_number)
         except Station.DoesNotExist:
             return custom_response(
-                detail=AUTH_ERROR_MESSAGES['not_found'].format(item="Stansiya"),
+                detail=STATION_ERROR_MESSAGES['not_found'].format(number=station_number),
                 status_code=status.HTTP_404_NOT_FOUND,
                 success=False
             )

@@ -21,18 +21,20 @@ class IDWInterpolator:
     Inverse Distance Weighting (IDW) interpolation implementation using NumPy.
     """
     
-    def __init__(self, points, power=3, smoothing=0.3, radius=15000000):
+    def __init__(self, points, value_field='value', power=3, smoothing=0.3, radius=15000000):
         """
         Initialize the IDW interpolator with points and parameters.
         
         Args:
-            points: List of dictionaries with lat, lng, and aqi properties
+            points: List of dictionaries with lat, lng, and value properties
+            value_field: The field name containing the value to interpolate
             power: Power parameter for IDW (increased to 3 for stronger influence of closer points)
             smoothing: Smoothing factor (reduced to 0.3 for more pronounced gradients)
             radius: Search radius in meters (increased for wider station influence)
         """
         self.points = np.array([(p['lat'], p['lng']) for p in points])
-        self.values = np.array([p['aqi'] for p in points])
+        self.values = np.array([p[value_field] for p in points])
+        self.value_field = value_field
         self.power = power
         self.smoothing = smoothing
         self.radius = radius
@@ -319,6 +321,7 @@ def interpolate_hexgrid(hexgrid, interpolator):
         Dictionary mapping hex_ids to interpolated values
     """
     hex_data = {}
+    value_field = interpolator.value_field
     
     for hex_id in hexgrid['hex_ids']:
         try:
@@ -331,48 +334,14 @@ def interpolate_hexgrid(hexgrid, interpolator):
             # Store the result with appropriate encoding
             rounded_value = round(value, 2)
             hex_data[hex_id] = {
-                'aqi': rounded_value,
-                'description': get_aqi_description(rounded_value),
-                'color': get_aqi_color(rounded_value)
+                value_field: rounded_value
             }
             
         except Exception as e:
             logger.error(f"Error interpolating data for hex_id {hex_id}: {e}")
             # Provide a default value for this hexagon
             hex_data[hex_id] = {
-                'aqi': 0,
-                'description': 'No data',
-                'color': '#cccccc'
+                value_field: 0
             }
     
-    return hex_data
-
-def get_aqi_description(aqi):
-    """Get the AQI description based on the AQI value."""
-    if aqi <= 50:
-        return 'Good'
-    elif aqi <= 100:
-        return 'Moderate'
-    elif aqi <= 150:
-        return 'Unhealthy for Sensitive Groups'
-    elif aqi <= 200:
-        return 'Unhealthy'
-    elif aqi <= 300:
-        return 'Very Unhealthy'
-    else:
-        return 'Hazardous'
-
-def get_aqi_color(aqi):
-    """Get the AQI color based on the AQI value."""
-    if aqi <= 50:
-        return '#00e400'  # Good
-    elif aqi <= 100:
-        return '#ffff00'  # Moderate
-    elif aqi <= 150:
-        return '#ff7e00'  # Unhealthy for Sensitive Groups
-    elif aqi <= 200:
-        return '#ff0000'  # Unhealthy
-    elif aqi <= 300:
-        return '#99004c'  # Very Unhealthy
-    else:
-        return '#7e0023'  # Hazardous 
+    return hex_data 

@@ -7,8 +7,8 @@ from web.models import Station
 import json
 
 
-class StationListCreateViewTests(APITestCase):
-    """Test cases for the StationListCreateView"""
+class StationViewTests(APITestCase):
+    """Test cases for the StationView"""
     
     def setUp(self):
         """Set up for the tests"""
@@ -149,8 +149,8 @@ class StationListCreateViewTests(APITestCase):
         self.assertFalse(response.data['success'])
 
 
-class StationDetailUpdateViewTests(APITestCase):
-    """Test cases for the StationDetailUpdateView"""
+class StationDetailViewTests(APITestCase):
+    """Test cases for the StationDetailView"""
     
     def setUp(self):
         """Set up for the tests"""

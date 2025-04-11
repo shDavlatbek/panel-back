@@ -6,7 +6,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from ..utils import custom_response
-from ..error_messages import LOGIN_ERROR_MESSAGES
+from ..error_messages import LOGIN_ERROR_MESSAGES, AUTH_ERROR_MESSAGES
 
 
 def get_token_for_user(user):
@@ -55,8 +55,8 @@ class LoginView(APIView):
                     }
                 )
             ),
-            400: "Noto'g'ri so'rov",
-            401: "Noto'g'ri login yoki parol",
+            400: f"Bad Request: {LOGIN_ERROR_MESSAGES['missing_fields']}",
+            401: f"Unauthorized: {LOGIN_ERROR_MESSAGES['invalid_credentials']}"
         }
     )
     def post(self, request):

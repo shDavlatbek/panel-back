@@ -2,12 +2,12 @@ from django.contrib import admin
 from django.db import models
 from django.forms import widgets
 from django.utils.safestring import mark_safe
-from .models import Station, ParameterType, Parameter, GeographicArea
+from .models import Station, ParameterName, Parameter, GeographicArea
 import os
 
 # Register your models here.
 admin.site.register(Station)
-admin.site.register(ParameterType)
+admin.site.register(ParameterName)
 admin.site.register(Parameter)
 
 class MapPolygonWidget(widgets.Textarea):
