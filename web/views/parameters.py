@@ -3,26 +3,16 @@ from rest_framework.views import APIView
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from ..utils import custom_response
-from ..error_messages import AUTH_ERROR_MESSAGES, PARAMETER_ERROR_MESSAGES
+from ..error_messages import AUTH_ERROR_MESSAGES
 from ..models import Station, ParameterName, Parameter
 import asyncio
-import aiohttp
-from bs4 import BeautifulSoup
 import pandas as pd
 from datetime import datetime, timedelta
-import time
-import logging
-from django.db.models import Max
-from django.conf import settings
+from django.db.models import Max, Avg
 from ..utils import weather_scraper
-
-# Set up logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
-logger = logging.getLogger(__name__)
+from ..utils.logger import logger
+from django.db.models import Q
+from django.utils.dateparse import parse_datetime
 
 
 class ParameterNameView(APIView):
@@ -86,22 +76,36 @@ class ParameterNameView(APIView):
         )
 
 
-class ParametersByStationView(APIView):
+class ParametersView(APIView):
     """
-    View for retrieving parameters by station number
+    View for retrieving parameters for all stations
     """
     permission_classes = [permissions.IsAuthenticated]
     
     @swagger_auto_schema(
         tags=['Parameters'],
-        operation_description="Stansiya raqami bo'yicha parametrlarni olish",
+        operation_description="Barcha stansiyalar parametrlarini olish",
         manual_parameters=[
             openapi.Parameter(
-                'station_number',
-                openapi.IN_PATH,
-                description="Stansiya raqami",
+                'start_date',
+                openapi.IN_QUERY,
+                description="Boshlanish sanasi (UTC+5 vaqtida, 'YYYY-MM-DD HH:MM:SS' formatida)",
                 type=openapi.TYPE_STRING,
-                required=True
+                required=False
+            ),
+            openapi.Parameter(
+                'end_date',
+                openapi.IN_QUERY,
+                description="Tugash sanasi (UTC+5 vaqtida, 'YYYY-MM-DD HH:MM:SS' formatida)",
+                type=openapi.TYPE_STRING,
+                required=False
+            ),
+            openapi.Parameter(
+                'parameter_name',
+                openapi.IN_QUERY,
+                description="Parametr nomi slugi",
+                type=openapi.TYPE_STRING,
+                required=False
             )
         ],
         responses={
@@ -115,12 +119,15 @@ class ParametersByStationView(APIView):
                         'result': openapi.Schema(
                             type=openapi.TYPE_OBJECT,
                             properties={
-                                'station': openapi.Schema(
-                                    type=openapi.TYPE_OBJECT,
-                                    properties={
-                                        'number': openapi.Schema(type=openapi.TYPE_STRING),
-                                        'name': openapi.Schema(type=openapi.TYPE_STRING)
-                                    }
+                                'stations': openapi.Schema(
+                                    type=openapi.TYPE_ARRAY,
+                                    items=openapi.Schema(
+                                        type=openapi.TYPE_OBJECT,
+                                        properties={
+                                            'number': openapi.Schema(type=openapi.TYPE_STRING),
+                                            'name': openapi.Schema(type=openapi.TYPE_STRING)
+                                        }
+                                    )
                                 ),
                                 'parameters': openapi.Schema(
                                     type=openapi.TYPE_ARRAY,
@@ -128,6 +135,7 @@ class ParametersByStationView(APIView):
                                         type=openapi.TYPE_OBJECT,
                                         properties={
                                             'id': openapi.Schema(type=openapi.TYPE_INTEGER),
+                                            'station_number': openapi.Schema(type=openapi.TYPE_STRING),
                                             'datetime': openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATETIME),
                                             '<param-slug>': openapi.Schema(type=openapi.TYPE_NUMBER),
                                         }
@@ -140,36 +148,183 @@ class ParametersByStationView(APIView):
                 )
             ),
             401: "Autentifikatsiya muvaffaqiyatsiz",
-            404: "Stansiya topilmadi",
         }
     )
-    def get(self, request, station_number):
-        try:
-            station = Station.objects.get(number=station_number)
-        except Station.DoesNotExist:
-            return custom_response(
-                detail=AUTH_ERROR_MESSAGES['not_found'].format(item="Stansiya"),
-                status_code=status.HTTP_404_NOT_FOUND,
-                success=False
-            )
+    def get(self, request):
+        """
+        Get parameters for all stations
+        """
+        return self._get_parameters(request, None)
         
-        parameters = Parameter.objects.filter(station=station)
+    def _get_parameters(self, request, station_number=None):
+        """
+        Internal method to handle parameter retrieval
+        """
+        # Get query parameters
+        start_date_str = request.query_params.get('start_date')
+        end_date_str = request.query_params.get('end_date')
+        param_name_slug = request.query_params.get('parameter_name')
+        
+        # Handle timezone conversion (UTC+5 to UTC)
+        start_date = None
+        end_date = None
+        
+        # If no dates specified, use last 10 days
+        if not start_date_str:
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=10)
+        else:
+            # Convert from UTC+5 to UTC by subtracting 5 hours
+            start_date = parse_datetime(start_date_str)
+            if start_date:
+                start_date = start_date - timedelta(hours=5)
+        
+        if end_date_str:
+            end_date = parse_datetime(end_date_str)
+            if end_date:
+                end_date = end_date - timedelta(hours=5)
+        
+        # Special case for 'avg' station
+        if station_number == 'avg':
+            return self._get_average_parameters(request, start_date, end_date, param_name_slug)
+        
+        # Initialize filters
+        filters = Q()
+        
+        # If station_number is provided, filter by station
+        if station_number:
+            try:
+                station = Station.objects.get(number=station_number)
+                filters &= Q(station=station)
+            except Station.DoesNotExist:
+                return custom_response(
+                    detail=AUTH_ERROR_MESSAGES['not_found'].format(item="Stansiya"),
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    success=False
+                )
+        
+        # Add date filters if provided
+        if start_date:
+            filters &= Q(datetime__gte=start_date)
+        if end_date:
+            filters &= Q(datetime__lte=end_date)
+            
+        # Add parameter name filter if provided
+        if param_name_slug:
+            try:
+                parameter_name = ParameterName.objects.get(slug=param_name_slug)
+                filters &= Q(parameter_name=parameter_name)
+            except ParameterName.DoesNotExist:
+                return custom_response(
+                    detail=AUTH_ERROR_MESSAGES['not_found'].format(item="Parametr nomi"),
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    success=False
+                )
+        
+        # Get filtered parameters
+        parameters = Parameter.objects.filter(filters).select_related('station', 'parameter_name')
         parameters_data = []
         
+        # Get all stations data if station_number is not provided
+        if station_number:
+            stations_data = [{
+                'number': station.number,
+                'name': station.name
+            }]
+        else:
+            # Get all unique stations from filtered parameters
+            station_ids = parameters.values_list('station_id', flat=True).distinct()
+            stations = Station.objects.filter(id__in=station_ids)
+            stations_data = [{
+                'number': s.number,
+                'name': s.name
+            } for s in stations]
+        
         for parameter in parameters:
-            parameters_data.append({
+            # Convert datetime from UTC to UTC+5 by adding 5 hours
+            local_datetime = parameter.datetime + timedelta(hours=5)
+            
+            param_data = {
                 'id': parameter.id,
-                'datetime': parameter.datetime,
+                'datetime': local_datetime,
                 parameter.parameter_name.slug: parameter.value
-            })
+            }
+            
+            # Add station_number to each parameter if multiple stations
+            if not station_number:
+                param_data['station_number'] = parameter.station.number
+                
+            parameters_data.append(param_data)
+        
+        # Return response with stations data and parameters
+        result_data = {
+            'parameters': parameters_data
+        }
+        
+        if station_number:
+            result_data['station'] = stations_data[0]
+        else:
+            result_data['stations'] = stations_data
+        
+        return custom_response(
+            data=result_data,
+            status_code=status.HTTP_200_OK
+        )
+    
+    def _get_average_parameters(self, request, start_date, end_date, param_name_slug):
+        """
+        Calculate average values for all stations or specific parameter
+        between start_date and end_date.
+        """
+        filters = Q()
+        
+        # Add date filters if provided
+        if start_date:
+            filters &= Q(datetime__gte=start_date)
+        if end_date:
+            filters &= Q(datetime__lte=end_date)
+            
+        # Filter by parameter name if provided
+        if param_name_slug:
+            try:
+                parameter_name = ParameterName.objects.get(slug=param_name_slug)
+                filters &= Q(parameter_name=parameter_name)
+                parameter_names = [parameter_name]
+            except ParameterName.DoesNotExist:
+                return custom_response(
+                    detail=AUTH_ERROR_MESSAGES['not_found'].format(item="Parametr nomi"),
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    success=False
+                )
+        else:
+            # Get all parameter names if not specified
+            parameter_names = ParameterName.objects.all()
+        
+        avg_parameters = []
+        
+        # Calculate averages for each parameter name
+        for param_name in parameter_names:
+            avg_value = Parameter.objects.filter(
+                filters & Q(parameter_name=param_name)
+            ).aggregate(avg_value=Avg('value'))['avg_value']
+            
+            if avg_value is not None:
+                # Use current datetime for the average value
+                current_datetime = datetime.now() + timedelta(hours=5)  # Convert to UTC+5
+                
+                avg_parameters.append({
+                    'id': None,
+                    'datetime': current_datetime,
+                    param_name.slug: round(avg_value, 2)  # Round to 2 decimal places
+                })
         
         return custom_response(
             data={
                 'station': {
-                    'number': station.number,
-                    'name': station.name
+                    'number': 'avg',
+                    'name': 'Average of all stations'
                 },
-                'parameters': parameters_data
+                'parameters': avg_parameters
             },
             status_code=status.HTTP_200_OK
         )
@@ -198,6 +353,20 @@ class ParametersByNameAndStationView(APIView):
                 description="Parametr nomi slugi",
                 type=openapi.TYPE_STRING,
                 required=True
+            ),
+            openapi.Parameter(
+                'start_date',
+                openapi.IN_QUERY,
+                description="Boshlanish sanasi (UTC+5 vaqtida, 'YYYY-MM-DD HH:MM:SS' formatida)",
+                type=openapi.TYPE_STRING,
+                required=False
+            ),
+            openapi.Parameter(
+                'end_date',
+                openapi.IN_QUERY,
+                description="Tugash sanasi (UTC+5 vaqtida, 'YYYY-MM-DD HH:MM:SS' formatida)",
+                type=openapi.TYPE_STRING,
+                required=False
             )
         ],
         responses={
@@ -241,6 +410,34 @@ class ParametersByNameAndStationView(APIView):
         }
     )
     def get(self, request, station_number, parameter_name_slug):
+        # Get query parameters
+        start_date_str = request.query_params.get('start_date')
+        end_date_str = request.query_params.get('end_date')
+        
+        # Handle timezone conversion (UTC+5 to UTC)
+        start_date = None
+        end_date = None
+        
+        # If no dates specified, use last 10 days
+        if not start_date_str:
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=10)
+        else:
+            # Convert from UTC+5 to UTC by subtracting 5 hours
+            start_date = parse_datetime(start_date_str)
+            if start_date:
+                start_date = start_date - timedelta(hours=5)
+        
+        if end_date_str:
+            end_date = parse_datetime(end_date_str)
+            if end_date:
+                end_date = end_date - timedelta(hours=5)
+        
+        # Special case for 'avg' station
+        if station_number == 'avg':
+            return self._get_average_parameters(request, start_date, end_date, parameter_name_slug)
+        
+        # Regular station lookup
         try:
             station = Station.objects.get(number=station_number)
         except Station.DoesNotExist:
@@ -259,13 +456,26 @@ class ParametersByNameAndStationView(APIView):
                 success=False
             )
         
-        parameters = Parameter.objects.filter(station=station, parameter_name=parameter_name)
+        # Build filter for parameters
+        filters = Q(station=station, parameter_name=parameter_name)
+        
+        # Add date filters if provided
+        if start_date:
+            filters &= Q(datetime__gte=start_date)
+        if end_date:
+            filters &= Q(datetime__lte=end_date)
+        
+        # Get filtered parameters
+        parameters = Parameter.objects.filter(filters)
         parameters_data = []
         
         for parameter in parameters:
+            # Convert datetime from UTC to UTC+5 by adding 5 hours
+            local_datetime = parameter.datetime + timedelta(hours=5)
+            
             parameters_data.append({
                 'id': parameter.id,
-                'datetime': parameter.datetime,
+                'datetime': local_datetime,
                 'value': parameter.value
             })
         
@@ -274,6 +484,56 @@ class ParametersByNameAndStationView(APIView):
                 'station': {
                     'number': station.number,
                     'name': station.name
+                },
+                'parameter_name_slug': parameter_name.slug,
+                'parameters': parameters_data
+            },
+            status_code=status.HTTP_200_OK
+        )
+    
+    def _get_average_parameters(self, request, start_date, end_date, parameter_name_slug):
+        """
+        Calculate average values for a specific parameter
+        between start_date and end_date across all stations.
+        """
+        try:
+            parameter_name = ParameterName.objects.get(slug=parameter_name_slug)
+        except ParameterName.DoesNotExist:
+            return custom_response(
+                detail=AUTH_ERROR_MESSAGES['not_found'].format(item="Parametr nomi"),
+                status_code=status.HTTP_404_NOT_FOUND,
+                success=False
+            )
+        
+        # Build filter
+        filters = Q(parameter_name=parameter_name)
+        
+        # Add date filters if provided
+        if start_date:
+            filters &= Q(datetime__gte=start_date)
+        if end_date:
+            filters &= Q(datetime__lte=end_date)
+        
+        # Calculate average value
+        avg_value = Parameter.objects.filter(filters).aggregate(avg_value=Avg('value'))['avg_value']
+        
+        if avg_value is None:
+            parameters_data = []
+        else:
+            # Use current datetime for the average value
+            current_datetime = datetime.now() + timedelta(hours=5)  # Convert to UTC+5
+            
+            parameters_data = [{
+                'id': None,
+                'datetime': current_datetime,
+                'value': round(avg_value, 2)  # Round to 2 decimal places
+            }]
+        
+        return custom_response(
+            data={
+                'station': {
+                    'number': 'avg',
+                    'name': 'Average of all stations'
                 },
                 'parameter_name_slug': parameter_name.slug,
                 'parameters': parameters_data
@@ -706,4 +966,90 @@ class ParameterScrapeView(APIView):
             'ef_temp': '°C',
             'dust_storm': 'n'
         }
-        return units.get(slug, '') 
+        return units.get(slug, '')
+
+
+class StationParametersView(APIView):
+    """
+    View for retrieving parameters for a specific station
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    @swagger_auto_schema(
+        tags=['Parameters'],
+        operation_description="Ma'lum stansiya parametrlarini olish",
+        manual_parameters=[
+            openapi.Parameter(
+                'station_number',
+                openapi.IN_PATH,
+                description="Stansiya raqami (avg - barcha stansiyalar o'rtachasi uchun)",
+                type=openapi.TYPE_STRING,
+                required=True
+            ),
+            openapi.Parameter(
+                'start_date',
+                openapi.IN_QUERY,
+                description="Boshlanish sanasi (UTC+5 vaqtida, 'YYYY-MM-DD HH:MM:SS' formatida)",
+                type=openapi.TYPE_STRING,
+                required=False
+            ),
+            openapi.Parameter(
+                'end_date',
+                openapi.IN_QUERY,
+                description="Tugash sanasi (UTC+5 vaqtida, 'YYYY-MM-DD HH:MM:SS' formatida)",
+                type=openapi.TYPE_STRING,
+                required=False
+            ),
+            openapi.Parameter(
+                'parameter_name',
+                openapi.IN_QUERY,
+                description="Parametr nomi slugi",
+                type=openapi.TYPE_STRING,
+                required=False
+            )
+        ],
+        responses={
+            200: openapi.Response(
+                description="Parametrlar ro'yxati muvaffaqiyatli olindi",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'status': openapi.Schema(type=openapi.TYPE_INTEGER),
+                        'success': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                        'result': openapi.Schema(
+                            type=openapi.TYPE_OBJECT,
+                            properties={
+                                'station': openapi.Schema(
+                                    type=openapi.TYPE_OBJECT,
+                                    properties={
+                                        'number': openapi.Schema(type=openapi.TYPE_STRING),
+                                        'name': openapi.Schema(type=openapi.TYPE_STRING)
+                                    }
+                                ),
+                                'parameters': openapi.Schema(
+                                    type=openapi.TYPE_ARRAY,
+                                    items=openapi.Schema(
+                                        type=openapi.TYPE_OBJECT,
+                                        properties={
+                                            'id': openapi.Schema(type=openapi.TYPE_INTEGER),
+                                            'datetime': openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATETIME),
+                                            '<param-slug>': openapi.Schema(type=openapi.TYPE_NUMBER),
+                                        }
+                                    )
+                                )
+                            }
+                        ),
+                        'detail': openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
+                    }
+                )
+            ),
+            401: "Autentifikatsiya muvaffaqiyatsiz",
+            404: "Stansiya topilmadi",
+        }
+    )
+    def get(self, request, station_number):
+        """
+        Get parameters for a specific station
+        """
+        params_view = ParametersView()
+        return params_view._get_parameters(request, station_number) 

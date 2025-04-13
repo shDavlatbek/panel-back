@@ -4,8 +4,9 @@ from .stations import StationView, StationDetailView
 from .parameters import (
     ParameterScrapeView,
     ParameterNameView,
-    ParametersByStationView,
-    ParametersByNameAndStationView
+    ParametersView,
+    ParametersByNameAndStationView,
+    StationParametersView
 )
 from .hexgrid import HexGridAPIView
 from .hexdata import HexagonDataAPIView
@@ -18,8 +19,9 @@ __all__ = [
     'StationDetailView',
     'ParameterScrapeView',
     'ParameterNameView',
-    'ParametersByStationView',
+    'ParametersView',
     'ParametersByNameAndStationView',
+    'StationParametersView',
     'HexGridAPIView',
     'HexagonDataAPIView',
     'MapView',

@@ -2,9 +2,9 @@ from django.urls import path
 from .views import (
     LoginView, UserMeView, 
     StationView, StationDetailView, ParameterNameView, 
-    ParametersByStationView, ParametersByNameAndStationView,
+    ParametersView, ParametersByNameAndStationView,
     HexGridAPIView, HexagonDataAPIView, MapView,
-    ParameterScrapeView
+    ParameterScrapeView, StationParametersView
 )
 
 app_name = 'web'
@@ -20,7 +20,8 @@ urlpatterns = [
     
     # Parameters endpoints - specific routes first, then generic patterns
     path('parameters/scrape', ParameterScrapeView.as_view(), name='parameters_scrape'),
-    path('parameters/<str:station_number>', ParametersByStationView.as_view(), name='parameters_by_station'),
+    path('parameters', ParametersView.as_view(), name='parameters_all'),
+    path('parameters/<str:station_number>', StationParametersView.as_view(), name='parameters_by_station'),
     path('parameters/<str:station_number>/<slug:parameter_name_slug>', 
          ParametersByNameAndStationView.as_view(), name='parameters_by_name_and_station'),
          
