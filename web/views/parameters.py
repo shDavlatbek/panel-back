@@ -532,6 +532,7 @@ class StationParametersView(APIView):
     View for retrieving parameters for a specific station
     """
     permission_classes = [permissions.IsAuthenticated]
+    http_method_names = ['get', 'delete']  # Explicitly allow GET and DELETE methods
     
     @swagger_auto_schema(
         tags=['Parameters'],
@@ -645,6 +646,138 @@ class StationParametersView(APIView):
         """
         params_view = ParametersView()
         return params_view._get_parameters(request, station_number)
+
+    @swagger_auto_schema(
+        tags=['Parameters'],
+        operation_description="Ma'lum stansiya va vaqt uchun parametrlarni o'chirish",
+        manual_parameters=[
+            openapi.Parameter(
+                'station_number',
+                openapi.IN_PATH,
+                description="Stansiya raqami",
+                type=openapi.TYPE_STRING,
+                required=True
+            ),
+            openapi.Parameter(
+                'datetime',
+                openapi.IN_QUERY,
+                description="Vaqt (UTC+5 vaqtida, 'YYYY-MM-DD HH:MM:SS' formatida)",
+                type=openapi.TYPE_STRING,
+                required=True
+            ),
+            openapi.Parameter(
+                'parameter_name',
+                openapi.IN_QUERY,
+                description="Parametr nomi slugi (ko'rsatilmasa, barcha parametrlar o'chiriladi)",
+                type=openapi.TYPE_STRING,
+                required=False
+            )
+        ],
+        responses={
+            200: openapi.Response(
+                description="Parametrlar muvaffaqiyatli o'chirildi",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'status': openapi.Schema(type=openapi.TYPE_INTEGER),
+                        'success': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                        'result': openapi.Schema(
+                            type=openapi.TYPE_OBJECT,
+                            properties={
+                                'deleted_count': openapi.Schema(type=openapi.TYPE_INTEGER),
+                                'station_number': openapi.Schema(type=openapi.TYPE_STRING),
+                                'datetime': openapi.Schema(type=openapi.TYPE_STRING),
+                                'parameter_name': openapi.Schema(type=openapi.TYPE_STRING, nullable=True)
+                            }
+                        ),
+                        'detail': openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
+                    }
+                )
+            ),
+            400: "So'rov parametrlari noto'g'ri",
+            401: "Autentifikatsiya muvaffaqiyatsiz",
+            404: "Stansiya topilmadi",
+        }
+    )
+    def delete(self, request, station_number):
+        """
+        Delete parameters for a specific station and datetime
+        """
+        # Get query parameters
+        datetime_str = request.query_params.get('datetime')
+        param_name_slug = request.query_params.get('parameter_name')
+        
+        # Validate required parameters
+        if not datetime_str:
+            return custom_response(
+                detail="datetime parametri talab qilinadi",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                success=False
+            )
+        
+        # Handle timezone conversion (UTC+5 to UTC)
+        dt = parse_datetime(datetime_str)
+        if not dt:
+            return custom_response(
+                detail="datetime formati noto'g'ri. 'YYYY-MM-DD HH:MM:SS' formatida bo'lishi kerak",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                success=False
+            )
+        
+        # Convert from UTC+5 to UTC by subtracting 5 hours
+        dt_utc = dt - timedelta(hours=5)
+        
+        # Special case for 'avg' - cannot delete from virtual average station
+        if station_number == 'avg':
+            return custom_response(
+                detail="'avg' stansiyasidan parametrlarni o'chirib bo'lmaydi chunki bu virtual stansiya",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                success=False
+            )
+        
+        # Get station
+        try:
+            station = Station.objects.get(number=station_number)
+        except Station.DoesNotExist:
+            return custom_response(
+                detail=AUTH_ERROR_MESSAGES['not_found'].format(item="Stansiya"),
+                status_code=status.HTTP_404_NOT_FOUND,
+                success=False
+            )
+        
+        # Build filter for parameters to delete
+        filters = Q(station=station)
+        filters &= Q(datetime=dt_utc)
+        
+        # Add parameter name filter if provided
+        if param_name_slug:
+            try:
+                parameter_name = ParameterName.objects.get(slug=param_name_slug)
+                filters &= Q(parameter_name=parameter_name)
+            except ParameterName.DoesNotExist:
+                return custom_response(
+                    detail=AUTH_ERROR_MESSAGES['not_found'].format(item="Parametr nomi"),
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    success=False
+                )
+        
+        # Count and delete filtered parameters
+        parameters_count = Parameter.objects.filter(filters).count()
+        Parameter.objects.filter(filters).delete()
+        
+        # Create response with deletion info
+        result = {
+            'deleted_count': parameters_count,
+            'station_number': station_number,
+            'datetime': datetime_str,
+            'parameter_name': param_name_slug
+        }
+        
+        return custom_response(
+            data=result,
+            status_code=status.HTTP_200_OK,
+            detail=f"{parameters_count} ta parametr muvaffaqiyatli o'chirildi"
+        )
 
 
 class ParameterScrapeView(APIView):
