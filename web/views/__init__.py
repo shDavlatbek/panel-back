@@ -5,7 +5,6 @@ from .parameters import (
     ParameterScrapeView,
     ParameterNameView,
     ParametersView,
-    ParametersByNameAndStationView,
     StationParametersView
 )
 from .hexgrid import HexGridAPIView
@@ -20,7 +19,6 @@ __all__ = [
     'ParameterScrapeView',
     'ParameterNameView',
     'ParametersView',
-    'ParametersByNameAndStationView',
     'StationParametersView',
     'HexGridAPIView',
     'HexagonDataAPIView',

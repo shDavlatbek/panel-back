@@ -2,7 +2,7 @@ from django.urls import path
 from .views import (
     LoginView, UserMeView, 
     StationView, StationDetailView, ParameterNameView, 
-    ParametersView, ParametersByNameAndStationView,
+    ParametersView,
     HexGridAPIView, HexagonDataAPIView, MapView,
     ParameterScrapeView, StationParametersView
 )
@@ -22,8 +22,6 @@ urlpatterns = [
     path('parameters/scrape', ParameterScrapeView.as_view(), name='parameters_scrape'),
     path('parameters', ParametersView.as_view(), name='parameters_all'),
     path('parameters/<str:station_number>', StationParametersView.as_view(), name='parameters_by_station'),
-    path('parameters/<str:station_number>/<slug:parameter_name_slug>', 
-         ParametersByNameAndStationView.as_view(), name='parameters_by_name_and_station'),
          
     # # Hex grid and data endpoints
     path('hexgrid', HexGridAPIView.as_view(), name='hex-grid'),
