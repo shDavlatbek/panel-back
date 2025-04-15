@@ -532,7 +532,7 @@ class StationParametersView(APIView):
     View for retrieving parameters for a specific station
     """
     permission_classes = [permissions.IsAuthenticated]
-    http_method_names = ['get', 'delete']  # Explicitly allow GET and DELETE methods
+    http_method_names = ['get', 'delete', 'post']  # Explicitly allow GET, DELETE and POST methods
     
     @swagger_auto_schema(
         tags=['Parameters'],
@@ -777,6 +777,215 @@ class StationParametersView(APIView):
             data=result,
             status_code=status.HTTP_200_OK,
             detail=f"{parameters_count} ta parametr muvaffaqiyatli o'chirildi"
+        )
+        
+    @swagger_auto_schema(
+        tags=['Parameters'],
+        operation_description="Ma'lum stansiya uchun ko'p parametrlarni bir vaqtda qo'shish",
+        manual_parameters=[
+            openapi.Parameter(
+                'station_number',
+                openapi.IN_PATH,
+                description="Stansiya raqami",
+                type=openapi.TYPE_STRING,
+                required=True
+            ),
+        ],
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            required=['items'],
+            properties={
+                'items': openapi.Schema(
+                    type=openapi.TYPE_ARRAY,
+                    description="Parametrlar ro'yxati",
+                    items=openapi.Schema(
+                        type=openapi.TYPE_OBJECT,
+                        required=['datetime'],
+                        properties={
+                            'datetime': openapi.Schema(
+                                type=openapi.TYPE_STRING, 
+                                description="Vaqt (UTC+5 vaqtida, 'YYYY-MM-DD HH:MM:SS' formatida)"
+                            ),
+                            'temp': openapi.Schema(type=openapi.TYPE_NUMBER, description="Harorat (°C)"),
+                            'humidity': openapi.Schema(type=openapi.TYPE_NUMBER, description="Namlik (%)"),
+                            'pressure': openapi.Schema(type=openapi.TYPE_NUMBER, description="Bosim (mm Hg)"),
+                            'wind_speed': openapi.Schema(type=openapi.TYPE_NUMBER, description="Shamol tezligi (m/s)"),
+                            'wind_direction': openapi.Schema(type=openapi.TYPE_NUMBER, description="Shamol yo'nalishi (°)"),
+                            'rainfall': openapi.Schema(type=openapi.TYPE_NUMBER, description="Yog'ingarchilik (mm)"),
+                            'ef_temp': openapi.Schema(type=openapi.TYPE_NUMBER, description="Effektiv harorat (°C)"),
+                            'dust_storm': openapi.Schema(type=openapi.TYPE_NUMBER, description="Chang bo'roni (1=ha, 0=yo'q)")
+                        }
+                    )
+                ),
+                'utc_time': openapi.Schema(
+                    type=openapi.TYPE_BOOLEAN,
+                    description="Vaqt formati UTC formatida (true) yoki UTC+5 formatida (false, odatiy qiymat)",
+                    default=False
+                )
+            }
+        ),
+        responses={
+            201: openapi.Response(
+                description="Parametrlar muvaffaqiyatli qo'shildi",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'status': openapi.Schema(type=openapi.TYPE_INTEGER),
+                        'success': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                        'result': openapi.Schema(
+                            type=openapi.TYPE_OBJECT,
+                            properties={
+                                'added_count': openapi.Schema(type=openapi.TYPE_INTEGER),
+                                'station_number': openapi.Schema(type=openapi.TYPE_STRING),
+                                'items_processed': openapi.Schema(type=openapi.TYPE_INTEGER)
+                            }
+                        ),
+                        'detail': openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
+                    }
+                )
+            ),
+            400: "So'rov parametrlari noto'g'ri",
+            401: "Autentifikatsiya muvaffaqiyatsiz",
+            404: "Stansiya topilmadi",
+        }
+    )
+    def post(self, request, station_number):
+        """
+        Bulk add parameters for a specific station
+        """
+        # Special case for 'avg' - cannot add to virtual average station
+        if station_number == 'avg':
+            return custom_response(
+                detail="'avg' stansiyasiga parametrlarni qo'shib bo'lmaydi chunki bu virtual stansiya",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                success=False
+            )
+        
+        # Get station
+        try:
+            station = Station.objects.get(number=station_number)
+        except Station.DoesNotExist:
+            return custom_response(
+                detail=AUTH_ERROR_MESSAGES['not_found'].format(item="Stansiya"),
+                status_code=status.HTTP_404_NOT_FOUND,
+                success=False
+            )
+        
+        # Validate request data
+        items = request.data.get('items', [])
+        if not items or not isinstance(items, list):
+            return custom_response(
+                detail="'items' maydoni talab qilinadi",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                success=False
+            )
+        
+        # Check if datetimes are already in UTC format
+        is_utc_time = request.data.get('utc_time', False)
+        
+        # Get all parameter names to map slug to object
+        parameter_names = {}
+        for param_name in ParameterName.objects.all():
+            parameter_names[param_name.slug] = param_name
+        
+        # Process each item
+        parameters_to_create = []
+        items_with_errors = []
+        added_count = 0
+        
+        for index, item in enumerate(items):
+            # Validate datetime
+            datetime_str = item.get('datetime')
+            if not datetime_str:
+                items_with_errors.append({
+                    'index': index,
+                    'error': "datetime maydoni talab qilinadi"
+                })
+                continue
+                
+            # Parse datetime
+            dt = parse_datetime(datetime_str)
+            if not dt:
+                items_with_errors.append({
+                    'index': index,
+                    'error': f"Noto'g'ri datetime formati: {datetime_str}"
+                })
+                continue
+            
+            # Handle timezone conversion if needed
+            if not is_utc_time:
+                # Convert from UTC+5 to UTC by subtracting 5 hours
+                dt_utc = dt - timedelta(hours=5)
+            else:
+                # Already in UTC, no conversion needed
+                dt_utc = dt
+            
+            # Process each parameter in the item
+            for key, value in item.items():
+                # Skip datetime field and empty values
+                if key == 'datetime' or value is None or value == '':
+                    continue
+                
+                # Check if parameter name exists
+                if key not in parameter_names:
+                    items_with_errors.append({
+                        'index': index,
+                        'error': f"Noma'lum parametr nomi: {key}"
+                    })
+                    continue
+                
+                try:
+                    # Convert value to float
+                    if isinstance(value, str):
+                        try:
+                            value = float(value)
+                        except ValueError:
+                            items_with_errors.append({
+                                'index': index,
+                                'error': f"Parametr qiymati son bo'lishi kerak: {key}={value}"
+                            })
+                            continue
+                    
+                    # Handle special case for wind_direction
+                    if key == 'wind_direction' and value == -1:
+                        value = -1  # Keep -1 value for wind_direction to indicate no wind
+                    
+                    # Create Parameter object
+                    parameters_to_create.append(
+                        Parameter(
+                            station=station,
+                            parameter_name=parameter_names[key],
+                            datetime=dt_utc,
+                            value=value
+                        )
+                    )
+                    added_count += 1
+                    
+                except Exception as e:
+                    items_with_errors.append({
+                        'index': index,
+                        'error': f"Xatolik yuz berdi: {str(e)}"
+                    })
+        
+        # Bulk create parameters (if any)
+        if parameters_to_create:
+            Parameter.objects.bulk_create(parameters_to_create, batch_size=1000, ignore_conflicts=True)
+        
+        # Prepare response
+        result = {
+            'added_count': added_count,
+            'station_number': station_number,
+            'items_processed': len(items),
+            'utc_time': is_utc_time
+        }
+        
+        if items_with_errors:
+            result['errors'] = items_with_errors
+        
+        return custom_response(
+            data=result,
+            status_code=status.HTTP_201_CREATED,
+            detail=f"{added_count} ta parametr muvaffaqiyatli qo'shildi"
         )
 
 
