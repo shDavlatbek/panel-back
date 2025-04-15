@@ -4,6 +4,9 @@ document.addEventListener('DOMContentLoaded', function() {
     let hexLayer = null;
     let loadingIndicator = null;
     let currentParameterName = 'temp'; // Default parameter to display
+    let currentDateTime = null; // Default to latest data (null = latest)
+    let datetimePicker = null; // Will store flatpickr instance
+    let stationData = []; // Store station data
     
     // Create the map centered at a default location (will adjust to data)
     const map = L.map('map').setView([40.7128, -74.0060], 10); // Default to NYC coordinates
@@ -12,6 +15,12 @@ document.addEventListener('DOMContentLoaded', function() {
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
     }).addTo(map);
+    
+    // Initialize datetime picker
+    initDatetimePicker();
+    
+    // Initialize table toggle
+    initTableToggle();
     
     // Add loading indicator to the map
     createLoadingIndicator();
@@ -41,41 +50,292 @@ document.addEventListener('DOMContentLoaded', function() {
     
     legend.addTo(map);
     
+    // Function to initialize table toggle
+    function initTableToggle() {
+        const toggleButton = document.getElementById('toggle-table');
+        const tableContainer = document.getElementById('station-table-container');
+        
+        if (toggleButton && tableContainer) {
+            toggleButton.addEventListener('click', function() {
+                if (tableContainer.classList.contains('hidden')) {
+                    tableContainer.classList.remove('hidden');
+                    toggleButton.textContent = 'Hide Station Data Table';
+                    // If datetime is selected, load the table data
+                    if (currentDateTime) {
+                        loadStationParametersTable();
+                    }
+                } else {
+                    tableContainer.classList.add('hidden');
+                    toggleButton.textContent = 'Show Station Data Table';
+                }
+            });
+        }
+    }
+    
+    // Function to initialize the datetime picker
+    function initDatetimePicker() {
+        const datetimeInput = document.getElementById('datetime-picker');
+        const resetTimeButton = document.getElementById('reset-time');
+        
+        if (datetimeInput) {
+            // Initialize flatpickr with time
+            datetimePicker = flatpickr(datetimeInput, {
+                enableTime: true,
+                dateFormat: "Y-m-d H:i:S",
+                time_24hr: true,
+                defaultDate: new Date(),
+                minuteIncrement: 60, // Increment by hour since our data is hourly
+                onChange: function(selectedDates, dateStr) {
+                    if (selectedDates && selectedDates.length > 0) {
+                        currentDateTime = dateStr;
+                        updateMapInfo();
+                        loadAreaData();
+                        // Load station parameters for table when datetime is selected
+                        loadStationParametersTable();
+                    }
+                }
+            });
+            
+            // Don't automatically load data on init - wait for user action
+            datetimePicker.clear();
+        }
+        
+        // Add event listener to reset button
+        if (resetTimeButton) {
+            resetTimeButton.addEventListener('click', function() {
+                if (datetimePicker) {
+                    datetimePicker.clear();
+                }
+                currentDateTime = null;
+                updateMapInfo();
+                loadAreaData();
+                // Reset table when returning to latest data
+                resetStationParametersTable();
+            });
+        }
+    }
+    
+    // Function to load station parameters for table display
+    function loadStationParametersTable() {
+        if (!currentDateTime) {
+            resetStationParametersTable();
+            return;
+        }
+        
+        const loadingMessage = document.getElementById('loading-message');
+        const tableWrapper = document.getElementById('table-wrapper');
+        
+        if (loadingMessage && tableWrapper) {
+            loadingMessage.textContent = 'Loading station data...';
+            loadingMessage.style.display = 'block';
+            tableWrapper.classList.add('hidden');
+        }
+        
+        // Create date range for API request (same start and end date)
+        const utcPlus5DateTime = currentDateTime; // Already in UTC+5 format
+        
+        // Fetch parameters for all stations at selected time
+        fetch(`/api/parameters?start_date=${encodeURIComponent(utcPlus5DateTime)}&end_date=${encodeURIComponent(utcPlus5DateTime)}`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken'),
+                'Authorization': 'Bearer ' + getCookie('token')
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Failed to fetch station parameters: ${response.status} ${response.statusText}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Station parameters response:', data);
+            if (data.success && data.result && data.result.items) {
+                const parameters = data.result.items;
+                const stations = data.result.stations || [];
+                
+                // Build station lookup for easy reference
+                const stationLookup = {};
+                stations.forEach(station => {
+                    stationLookup[station.number] = station.name;
+                });
+                
+                // Display data in the table
+                displayStationParameters(parameters, stationLookup);
+            } else {
+                throw new Error('No parameter data available');
+            }
+        })
+        .catch(error => {
+            console.error('Error loading station parameters:', error);
+            if (loadingMessage) {
+                loadingMessage.textContent = `Error loading station data: ${error.message}`;
+            }
+        });
+    }
+    
+    // Function to display station parameters in the table
+    function displayStationParameters(parameters, stationLookup) {
+        const tableBody = document.getElementById('station-parameters-body');
+        const loadingMessage = document.getElementById('loading-message');
+        const tableWrapper = document.getElementById('table-wrapper');
+        
+        if (!tableBody || !loadingMessage || !tableWrapper) return;
+        
+        // Clear existing table rows
+        tableBody.innerHTML = '';
+        
+        if (parameters.length === 0) {
+            loadingMessage.textContent = 'No station data available for the selected time.';
+            loadingMessage.style.display = 'block';
+            tableWrapper.classList.add('hidden');
+            return;
+        }
+        
+        // Group parameters by station
+        const stationParameters = {};
+        
+        parameters.forEach(param => {
+            const stationNumber = param.station_number;
+            if (!stationParameters[stationNumber]) {
+                stationParameters[stationNumber] = {
+                    name: stationLookup[stationNumber] || stationNumber,
+                    parameters: {}
+                };
+            }
+            
+            // Add all parameter values
+            Object.keys(param).forEach(key => {
+                // Skip non-parameter keys
+                if (['station_number', 'datetime'].includes(key)) return;
+                
+                stationParameters[stationNumber].parameters[key] = param[key];
+            });
+        });
+        
+        // Create table rows
+        Object.keys(stationParameters).forEach(stationNumber => {
+            const station = stationParameters[stationNumber];
+            const row = document.createElement('tr');
+            
+            // Station name column
+            const nameCell = document.createElement('td');
+            nameCell.textContent = station.name;
+            row.appendChild(nameCell);
+            
+            // Parameter columns - add in fixed order to match headers
+            const parameterOrder = ['temp', 'humidity', 'pressure', 'wind_speed', 'wind_direction', 'rainfall', 'ef_temp', 'dust_storm'];
+            
+            parameterOrder.forEach(paramKey => {
+                const cell = document.createElement('td');
+                const value = station.parameters[paramKey];
+                
+                // Format value or show N/A
+                if (value !== null && value !== undefined) {
+                    if (paramKey === 'wind_direction') {
+                        cell.textContent = `${value}° (${degreesToCardinal(value)})`;
+                    } else if (paramKey === 'rainfall' && value === -1) {
+                        cell.textContent = 'None';
+                    } else if (paramKey === 'dust_storm' && (value === 0 || value === 1)) {
+                        cell.textContent = value === 1 ? 'Yes' : 'No';
+                    } else {
+                        cell.textContent = Number(value).toFixed(1);
+                    }
+                } else {
+                    cell.textContent = 'N/A';
+                }
+                
+                row.appendChild(cell);
+            });
+            
+            tableBody.appendChild(row);
+        });
+        
+        // Show the table
+        loadingMessage.style.display = 'none';
+        tableWrapper.classList.remove('hidden');
+    }
+    
+    // Helper function to convert wind direction degrees to cardinal direction
+    function degreesToCardinal(degrees) {
+        if (degrees === null || degrees === undefined) return 'N/A';
+        
+        const directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+        const index = Math.round(degrees / 22.5) % 16;
+        return directions[index];
+    }
+    
+    // Function to reset the station parameters table
+    function resetStationParametersTable() {
+        const loadingMessage = document.getElementById('loading-message');
+        const tableWrapper = document.getElementById('table-wrapper');
+        
+        if (loadingMessage && tableWrapper) {
+            loadingMessage.textContent = 'Please select a date and time to view station data.';
+            loadingMessage.style.display = 'block';
+            tableWrapper.classList.add('hidden');
+        }
+    }
+    
+    // Update the map info text
+    function updateMapInfo() {
+        const mapInfo = document.getElementById('map-info');
+        if (mapInfo) {
+            if (currentDateTime) {
+                mapInfo.textContent = `Showing ${currentParameterName} data for ${currentDateTime} (UTC+5)`;
+            } else {
+                mapInfo.textContent = `Showing latest ${currentParameterName} data for all stations`;
+            }
+        }
+    }
+    
     // Define station marker style
     function createStationMarker(station) {
         // Leaflet expects [lat, lng] format for coordinates
-        return L.circleMarker([station.lat, station.lon], {
+        let popupContent = `
+            <div class="station-tooltip">
+                <div class="station-name">${station.station_name || station.name}</div>
+                <div class="parameter-value">${currentParameterName}: ${station.parameter_value || 'N/A'} (${getValueDescription(station.parameter_value || 0)})</div>
+                <div>Location: [${station.lat}, ${station.lng || station.lon}]</div>
+        `;
+        
+        // Add datetime if available
+        if (station.parameter_datetime) {
+            popupContent += `<div>Time: ${formatDateTime(station.parameter_datetime)}</div>`;
+        }
+        
+        popupContent += `</div>`;
+        
+        return L.circleMarker([station.lat, station.lng || station.lon], {
             radius: 8,
             fillColor: getValueColor(station.parameter_value || 0),
             color: '#000',
             weight: 1,
             opacity: 1,
             fillOpacity: 0.8
-        }).bindPopup(`
-            <div class="station-tooltip">
-                <div class="station-name">${station.name}</div>
-                <div class="parameter-value">${currentParameterName}: ${station.parameter_value || 'N/A'} (${getValueDescription(station.parameter_value || 0)})</div>
-                <div>Location: [${station.lat}, ${station.lon}]</div>
-            </div>
-        `);
+        }).bindPopup(popupContent);
+    }
+    
+    // Format datetime for display
+    function formatDateTime(datetime) {
+        if (typeof datetime === 'string') {
+            return datetime;
+        }
+        const dt = new Date(datetime);
+        return dt.toLocaleString();
     }
     
     // Helper function to get color based on parameter value
     function getValueColor(value) {
-        if(value <= 50){
-            return 'rgba(159, 211, 92, 1)'
-          }else if(value > 50 && value <= 100){
-            return 'rgba(247, 213, 67, 1)'
-          }else if(value > 100 && value <= 150){
-            return 'rgba(236, 142, 79, 1)'
-          }else if(value > 150 && value < 200){
-            return 'rgba(233, 95, 94, 1)'
-          }else if(value >= 200 && value <= 300){
-            return 'rgba(145, 104, 161, 1)'
-          }else if(value > 300){
-            return 'rgba(157, 104, 120, 1)'
-          }
+        // Determine how many steps of 2 the current value represents.
+        const steps = Math.floor(value / 2);
+        // Change hue by 10 degrees for each step, and wrap around at 360 degrees.
+        const hue = (steps * 10) % 360;
+        // Return a color using the HSL format. Here, saturation and lightness are fixed.
+        return `hsl(${hue}, 70%, 50%)`;
     }
+    
     
     // Helper function to get description based on parameter value
     function getValueDescription(value) {
@@ -126,6 +386,12 @@ document.addEventListener('DOMContentLoaded', function() {
     function loadAreaData() {
         showLoading();
         
+        // Build the hexdata URL with query parameters
+        let hexDataUrl = `/api/hexdata?parameter_name=${currentParameterName}`;
+        if (currentDateTime) {
+            hexDataUrl += `&datetime=${encodeURIComponent(currentDateTime)}`;
+        }
+        
         // First, load the hexagon geometries using GET
         fetch('/api/hexgrid', {
             method: 'GET',
@@ -152,7 +418,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             // Now load the hexagon data using GET with the current parameter
-            return fetch(`/api/hexdata?parameter_name=${currentParameterName}`, {
+            return fetch(hexDataUrl, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
@@ -166,14 +432,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 return response.json();
             })
-            .then(hexData => {
-                hexData = hexData.result;
-                console.log('Received hex data:', hexData);
+            .then(data => {
+                data = data.result;
+                console.log('Received hex data:', data);
+                
+                // Extract hexagons from response
+                const hexData = data.hexagons || data;
+                
                 if (!hexData || hexData.length === 0) {
                     console.warn('No hex data returned from server');
                     hideLoading();
                     showErrorMessage('No data could be interpolated. Check if there are stations with parameter data available.');
                     return;
+                }
+                
+                // Update station markers if stations are included in response
+                if (data.metadata && data.metadata.stations_count) {
+                    updateMapInfo();
                 }
                 
                 renderHexagons(geojson, hexData);
@@ -204,6 +479,7 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .then(stations => {
             stations = stations.result.items;
+            stationData = stations; // Store station data for reference
 
             console.log('Fetched stations:', stations);
             // If no data, show a message
@@ -333,26 +609,26 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Create parameter selector control
-    const parameterControl = L.control({position: 'topright'});
+    // const parameterControl = L.control({position: 'topright'});
     
-    parameterControl.onAdd = function(map) {
-        const div = L.DomUtil.create('div', 'info parameter-control');
-        div.innerHTML = `
-            <h4>Select Parameter</h4>
-            <select id="parameter-select">
-                <option value="temp">Temperature</option>
-                <option value="wind-speed">Wind Speed</option>
-                <option value="pressure">Pressure</option>
-                <option value="humidity">Humidity</option>
-                <option value="rainfall">Rainfall</option>
-                <option value="ef-temp">Effective Temperature</option>
-                <option value="wind-direction">Wind Direction</option>
-            </select>
-        `;
-        return div;
-    };
+    // parameterControl.onAdd = function(map) {
+    //     const div = L.DomUtil.create('div', 'info parameter-control');
+    //     div.innerHTML = `
+    //         <h4>Select Parameter</h4>
+    //         <select id="parameter-select">
+    //             <option value="temp">Temperature</option>
+    //             <option value="wind-speed">Wind Speed</option>
+    //             <option value="pressure">Pressure</option>
+    //             <option value="humidity">Humidity</option>
+    //             <option value="rainfall">Rainfall</option>
+    //             <option value="ef-temp">Effective Temperature</option>
+    //             <option value="wind-direction">Wind Direction</option>
+    //         </select>
+    //     `;
+    //     return div;
+    // };
     
-    parameterControl.addTo(map);
+    // parameterControl.addTo(map);
     
     // Add event listener to parameter selector
     setTimeout(() => {
@@ -360,6 +636,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (parameterSelect) {
             parameterSelect.addEventListener('change', function() {
                 currentParameterName = this.value;
+                updateMapInfo();
                 loadAreaData(); // Reload data with the new parameter
             });
         }

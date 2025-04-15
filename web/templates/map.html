@@ -19,6 +19,10 @@
     <script src="https://unpkg.com/leaflet.hexbin@0.5.0/dist/leaflet-hexbin.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet.hexbin@0.5.0/dist/leaflet-hexbin.css" />
     
+    <!-- Flatpickr for datetime picker -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    
     <!-- Custom CSS -->
     <link rel="stylesheet" href="/static/css/map.css">
     
@@ -61,13 +65,152 @@
             margin-right: 8px;
             opacity: 0.7;
         }
+        .map-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 15px;
+            align-items: center;
+        }
+        .datetime-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        #datetime-picker {
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            min-width: 200px;
+        }
+        .reset-time {
+            background-color: #f0f0f0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 8px 12px;
+            cursor: pointer;
+        }
+        .reset-time:hover {
+            background-color: #e0e0e0;
+        }
+        .map-info {
+            margin-top: 5px;
+            font-style: italic;
+            color: #555;
+        }
+        /* Station parameters table styles */
+        .station-table-container {
+            margin-top: 20px;
+            width: 100%;
+            overflow-x: auto;
+        }
+        .station-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+        .station-table th, .station-table td {
+            padding: 8px;
+            border: 1px solid #ddd;
+            text-align: center;
+        }
+        .station-table th {
+            background-color: #f2f2f2;
+            position: sticky;
+            top: 0;
+        }
+        .station-table tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .station-table tr:hover {
+            background-color: #f5f5f5;
+        }
+        .table-section {
+            margin-top: 20px;
+        }
+        .table-toggle {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 14px;
+            margin: 10px 0;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        .table-toggle:hover {
+            background-color: #45a049;
+        }
+        .hidden {
+            display: none;
+        }
+        #loading-message {
+            text-align: center;
+            padding: 20px;
+            font-style: italic;
+        }
     </style>
     {% csrf_token %}
 </head>
 <body>
     <div class="container">
         <h1>AQI Map with IDW Interpolation</h1>
+        <div class="map-controls">
+            <div class="datetime-control">
+                <label for="datetime-picker">Select Date/Time (UTC+5):</label>
+                <input type="text" id="datetime-picker" placeholder="Select date and time">
+                <button class="reset-time" id="reset-time">Latest Data</button>
+            </div>
+            <div class="parameter-control">
+                <label for="parameter-select">Parameter:</label>
+                <select id="parameter-select">
+                    <option value="temp">Temperature</option>
+                    <option value="humidity">Humidity</option>
+                    <option value="pressure">Pressure</option>
+                    <option value="wind_speed">Wind Speed</option>
+                    <option value="wind_direction">Wind Direction</option>
+                    <option value="rainfall">Rainfall</option>
+                    <option value="ef_temp">Effective Temperature</option>
+                </select>
+            </div>
+        </div>
+        <div class="map-info" id="map-info">
+            Showing latest data for all stations.
+        </div>
         <div id="map"></div>
+        
+        <!-- Station Parameters Table Section -->
+        <div class="table-section">
+            <button id="toggle-table" class="table-toggle">Show Station Data Table</button>
+            <div id="station-table-container" class="station-table-container hidden">
+                <h2>Station Parameters for Selected Time</h2>
+                <div id="loading-message">Please select a date and time to view station data.</div>
+                <div id="table-wrapper" class="hidden">
+                    <table class="station-table" id="station-parameters-table">
+                        <thead>
+                            <tr>
+                                <th>Station</th>
+                                <th>Temperature (°C)</th>
+                                <th>Humidity (%)</th>
+                                <th>Pressure (mm Hg)</th>
+                                <th>Wind Speed (m/s)</th>
+                                <th>Wind Direction (°)</th>
+                                <th>Rainfall (mm)</th>
+                                <th>Effective Temp (°C)</th>
+                                <th>Dust Storm</th>
+                            </tr>
+                        </thead>
+                        <tbody id="station-parameters-body">
+                            <!-- Table rows will be populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
     
     <script src="/static/js/map.js"></script>

@@ -10,9 +10,11 @@ from web.utils.response_utils import custom_response
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from ..error_messages import VALIDATION_ERROR_MESSAGES, HEX_ERROR_MESSAGES
-
+from rest_framework.permissions import IsAuthenticated
 class HexGridAPIView(views.APIView):
     """API view to generate hexagonal grid as GeoJSON"""
+    
+    permission_classes = [IsAuthenticated]
     
     @swagger_auto_schema(
         tags=['Interpolation Map'],
