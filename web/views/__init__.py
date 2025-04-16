@@ -5,11 +5,12 @@ from .parameters import (
     ParameterScrapeView,
     ParameterNameView,
     ParametersView,
-    StationParametersView
+    StationParametersView,
 )
 from .hexgrid import HexGridAPIView
 from .hexdata import HexagonDataAPIView
 from .map import MapView
+from .chart import ParameterChartView
 
 __all__ = [
     'LoginView',
@@ -23,4 +24,5 @@ __all__ = [
     'HexGridAPIView',
     'HexagonDataAPIView',
     'MapView',
+    'ParameterChartView',
 ] 

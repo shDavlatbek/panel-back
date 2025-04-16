@@ -4,7 +4,8 @@ from .views import (
     StationView, StationDetailView, ParameterNameView, 
     ParametersView,
     HexGridAPIView, HexagonDataAPIView, MapView,
-    ParameterScrapeView, StationParametersView
+    ParameterScrapeView, StationParametersView,
+    ParameterChartView
 )
 
 app_name = 'web'
@@ -22,6 +23,9 @@ urlpatterns = [
     path('parameters/scrape', ParameterScrapeView.as_view(), name='parameters_scrape'),
     path('parameters', ParametersView.as_view(), name='parameters_all'),
     path('parameters/<str:station_number>', StationParametersView.as_view(), name='parameters_by_station'),
+    
+    # Chart endpoint
+    path('charts/<str:station_number>', ParameterChartView.as_view(), name='parameter_charts'),
          
     # # Hex grid and data endpoints
     path('hexgrid', HexGridAPIView.as_view(), name='hex-grid'),
