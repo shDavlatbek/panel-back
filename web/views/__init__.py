@@ -10,7 +10,7 @@ from .parameters import (
 from .hexgrid import HexGridAPIView
 from .hexdata import HexagonDataAPIView
 from .map import MapView
-from .chart import ParameterChartView
+from .chart import ParameterChartView, ParameterAvgChartView, ParameterAllChartView
 
 __all__ = [
     'LoginView',
@@ -25,4 +25,6 @@ __all__ = [
     'HexagonDataAPIView',
     'MapView',
     'ParameterChartView',
+    'ParameterAvgChartView',
+    'ParameterAllChartView',
 ] 

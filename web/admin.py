@@ -4,11 +4,49 @@ from django.forms import widgets
 from django.utils.safestring import mark_safe
 from .models import Station, ParameterName, Parameter, GeographicArea
 import os
+from django.utils import timezone
+from django.contrib.admin import SimpleListFilter
+
+# Custom filters for day and month
+class DayFilter(SimpleListFilter):
+    title = 'Day'
+    parameter_name = 'day'
+
+    def lookups(self, request, model_admin):
+        return [(str(i), str(i)) for i in range(1, 32)]
+
+    def queryset(self, request, queryset):
+        if self.value():
+            return queryset.filter(datetime__day=self.value())
+        return queryset
+
+class MonthFilter(SimpleListFilter):
+    title = 'Month'
+    parameter_name = 'month'
+
+    def lookups(self, request, model_admin):
+        months = [
+            (1, 'January'), (2, 'February'), (3, 'March'), (4, 'April'),
+            (5, 'May'), (6, 'June'), (7, 'July'), (8, 'August'),
+            (9, 'September'), (10, 'October'), (11, 'November'), (12, 'December')
+        ]
+        return [(str(k), v) for k, v in months]
+
+    def queryset(self, request, queryset):
+        if self.value():
+            return queryset.filter(datetime__month=self.value())
+        return queryset
 
 # Register your models here.
 admin.site.register(Station)
 admin.site.register(ParameterName)
-admin.site.register(Parameter)
+
+@admin.register(Parameter)
+class ParameterAdmin(admin.ModelAdmin):
+    list_display = ('station', 'parameter_name', 'datetime', 'value')
+    list_filter = ('station', 'parameter_name', 'datetime', DayFilter, MonthFilter)
+    date_hierarchy = 'datetime'
+    search_fields = ('station__name', 'station__number', 'parameter_name__name')
 
 class MapPolygonWidget(widgets.Textarea):
     """
