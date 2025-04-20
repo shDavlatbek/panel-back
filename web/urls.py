@@ -7,6 +7,7 @@ from .views import (
     ParameterScrapeView, StationParametersView,
     ParameterChartView, ParameterAvgChartView, ParameterAllChartView
 )
+from .views.stats import StatisticsView, MonthlyStatsView, CorrelationView
 
 app_name = 'web'
 
@@ -35,4 +36,9 @@ urlpatterns = [
     
     # Map view
     path('map/', MapView.as_view(), name='map-view'),
+    
+    # Statistics endpoints
+    path('stats', StatisticsView.as_view(), name='stats'),
+    path('stats/monthly', MonthlyStatsView.as_view(), name='monthly_stats'),
+    path('stats/correlation', CorrelationView.as_view(), name='correlation'),
 ] 
