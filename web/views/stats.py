@@ -42,9 +42,9 @@ class StatisticsView(APIView):
             openapi.Parameter(
                 'station_number',
                 openapi.IN_QUERY,
-                description="Stansiya raqami (ixtiyoriy, ko'rsatilmasa barcha stansiyalar uchun hisoblash amalga oshiriladi)",
+                description="Stansiya raqami",
                 type=openapi.TYPE_STRING,
-                required=False
+                required=True
             )
         ],
         responses={
@@ -155,6 +155,14 @@ class StatisticsView(APIView):
                     status_code=status.HTTP_400_BAD_REQUEST,
                     success=False
                 )
+            
+            # Validate station_number
+            if not station_number:
+                return custom_response(
+                    detail="station_number parametri talab qilinadi",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    success=False
+                )
                 
             # Process the date range based on parameters
             try:
@@ -181,18 +189,16 @@ class StatisticsView(APIView):
             # Initialize filters
             filters = Q(parameter_name=param_name, datetime__gte=start_date, datetime__lte=end_date)
             
-            # If station_number is provided, filter by station
-            station = None
-            if station_number:
-                try:
-                    station = Station.objects.get(number=station_number)
-                    filters &= Q(station=station)
-                except Station.DoesNotExist:
-                    return custom_response(
-                        detail=f"'{station_number}' stansiyasi topilmadi",
-                        status_code=status.HTTP_404_NOT_FOUND,
-                        success=False
-                    )
+            # Get station
+            try:
+                station = Station.objects.get(number=station_number)
+                filters &= Q(station=station)
+            except Station.DoesNotExist:
+                return custom_response(
+                    detail=f"'{station_number}' stansiyasi topilmadi",
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    success=False
+                )
             
             # Get parameters
             parameters = Parameter.objects.filter(filters).order_by('datetime')
@@ -371,14 +377,11 @@ class StatisticsView(APIView):
                 'items': chart_items
             }
             
-            # Add station information if provided
-            if station:
-                result['station'] = {
-                    'number': str(station.number),
-                    'name': station.name
-                }
-            else:
-                result['station'] = None
+            # Add station information
+            result['station'] = {
+                'number': str(station.number),
+                'name': station.name
+            }
             
             return custom_response(
                 data=result,
