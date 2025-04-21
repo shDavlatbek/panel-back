@@ -282,6 +282,8 @@ class StatisticsView(APIView):
             except Exception:
                 # Fallback if trend calculation fails
                 trend_direction = "Stabil"
+                tau = None
+                p_value = None
             
             # Format summary values with appropriate units and precision
             unit = param_name.unit or ""
@@ -373,7 +375,7 @@ class StatisticsView(APIView):
                     try:
                         month_avg = float(month_data['value'].mean())
                     except Exception:
-                        month_avg = 0.0
+                        month_avg = None
                     
                     monthly_mode.append({
                         'month': month,
@@ -385,7 +387,7 @@ class StatisticsView(APIView):
                     # Add to chart items
                     chart_items.append({
                         'name': param_name.name,
-                        'x': round(month_avg, 1),
+                        'x': round(month_avg, 1) if month_avg else None,
                         'y': short_month_names[month - 1]
                     })
                 else:
@@ -399,7 +401,7 @@ class StatisticsView(APIView):
                     # Add null or 0 values for missing months
                     chart_items.append({
                         'name': param_name.name,
-                        'x': 0,
+                        'x': None,
                         'y': short_month_names[month - 1]
                     })
             
