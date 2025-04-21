@@ -211,6 +211,18 @@ class StatisticsView(APIView):
                     success=False
                 )
             
+            # Helper function to handle non-JSON-compliant float values
+            def safe_float(value):
+                if value is None:
+                    return None
+                try:
+                    float_val = float(value)
+                    if np.isnan(float_val) or np.isinf(float_val):
+                        return None
+                    return float_val
+                except:
+                    return None
+            
             # Handle rainfall parameter specially - filter out -1 values which represent missing data
             is_rainfall = param_name_slug == 'rainfall'
             
@@ -249,36 +261,51 @@ class StatisticsView(APIView):
                 # Handle different SciPy versions
                 if hasattr(mode_result, 'mode'):
                     if isinstance(mode_result.mode, np.ndarray):
-                        mode_values = [float(m) for m in mode_result.mode]
+                        mode_values = [safe_float(m) for m in mode_result.mode]
                     else:
-                        mode_values = [float(mode_result.mode)]
+                        mode_values = [safe_float(mode_result.mode)]
                 else:
                     # For newer SciPy versions where mode returns a single value
-                    mode_values = [float(mode_result)]
+                    mode_values = [safe_float(mode_result)]
             except Exception:
                 # Fallback if mode calculation fails
-                mode_values = [float(values[0])] if values else [0.0]
+                mode_values = [safe_float(values[0])] if values else [None]
             
             # Calculate mean, median, standard deviation, and coefficient of variation
             if is_rainfall:
                 # For rainfall, calculate from filtered values
-                mean_val = float(np.mean(values)) if values else 0
-                median_val = float(np.median(values)) if values else 0
-                std_dev_val = float(np.std(values)) if len(values) > 1 else 0
+                try:
+                    mean_val = safe_float(np.mean(values)) if values else None
+                    median_val = safe_float(np.median(values)) if values else None
+                    std_dev_val = safe_float(np.std(values)) if len(values) > 1 else None
+                except:
+                    mean_val = None
+                    median_val = None
+                    std_dev_val = None
             else:
                 # For other parameters, use Django's aggregate functions
-                mean_val = float(parameters.aggregate(Avg('value'))['value__avg'])
-                median_val = float(np.median(values))
-                std_dev_val = float(parameters.aggregate(StdDev('value'))['value__stddev'] or 0)
+                try:
+                    mean_val = safe_float(parameters.aggregate(Avg('value'))['value__avg'])
+                    median_val = safe_float(np.median(values))
+                    std_dev_val = safe_float(parameters.aggregate(StdDev('value'))['value__stddev'] or 0)
+                except:
+                    mean_val = None
+                    median_val = None
+                    std_dev_val = None
             
-            coef_var = float(std_dev_val / mean_val) if mean_val != 0 else 0
+            try:
+                coef_var = safe_float(std_dev_val / mean_val) if mean_val and mean_val != 0 else None
+            except:
+                coef_var = None
             
             # Calculate trend (Kendall's Tau) - safely
             try:
                 from scipy.stats import kendalltau
                 x = range(len(values))
                 tau, p_value = kendalltau(x, values)
-                trend_direction = "O'sayotgan ↑" if tau > 0 else "Pasayuvchi ↓" if tau < 0 else "Stabil"
+                tau = safe_float(tau)
+                p_value = safe_float(p_value)
+                trend_direction = "O'sayotgan ↑" if tau and tau > 0 else "Pasayuvchi ↓" if tau and tau < 0 else "Stabil"
             except Exception:
                 # Fallback if trend calculation fails
                 trend_direction = "Stabil"
@@ -288,10 +315,10 @@ class StatisticsView(APIView):
             # Format summary values with appropriate units and precision
             unit = param_name.unit or ""
             summary = {
-                'mean': f"{round(mean_val, 1)} {unit}",
-                'median': f"{round(median_val, 1)} {unit}",
-                'std_dev': f"{round(std_dev_val, 1)} {unit}",
-                'coefficient_of_variation': round(coef_var, 2),
+                'mean': f"{round(mean_val, 1)} {unit}" if mean_val is not None else None,
+                'median': f"{round(median_val, 1)} {unit}" if median_val is not None else None,
+                'std_dev': f"{round(std_dev_val, 1)} {unit}" if std_dev_val is not None else None,
+                'coefficient_of_variation': round(coef_var, 2) if coef_var is not None else None,
                 'trend': trend_direction,
                 'tau': tau,
                 'p_value': p_value
@@ -299,15 +326,27 @@ class StatisticsView(APIView):
             
             # Get min/max for statistics
             if is_rainfall:
-                min_val = float(min(values)) if values else 0
-                max_val = float(max(values)) if values else 0
-                variance = float(np.var(values)) if len(values) > 1 else 0
-                count = len(values)
+                try:
+                    min_val = safe_float(min(values)) if values else None
+                    max_val = safe_float(max(values)) if values else None
+                    variance = safe_float(np.var(values)) if len(values) > 1 else None
+                    count = len(values)
+                except:
+                    min_val = None
+                    max_val = None
+                    variance = None
+                    count = 0
             else:
-                min_val = float(parameters.aggregate(Min('value'))['value__min'])
-                max_val = float(parameters.aggregate(Max('value'))['value__max'])
-                variance = float(np.var(values))
-                count = parameters.count()
+                try:
+                    min_val = safe_float(parameters.aggregate(Min('value'))['value__min'])
+                    max_val = safe_float(parameters.aggregate(Max('value'))['value__max'])
+                    variance = safe_float(np.var(values))
+                    count = parameters.count()
+                except:
+                    min_val = None
+                    max_val = None
+                    variance = None
+                    count = 0
             
             # Convert data for detailed statistics
             stats_data = {
@@ -361,19 +400,19 @@ class StatisticsView(APIView):
                         # Handle different SciPy versions
                         if hasattr(month_mode, 'mode'):
                             if isinstance(month_mode.mode, np.ndarray):
-                                month_mode_values = [float(m) for m in month_mode.mode]
+                                month_mode_values = [safe_float(m) for m in month_mode.mode]
                             else:
-                                month_mode_values = [float(month_mode.mode)]
+                                month_mode_values = [safe_float(month_mode.mode)]
                         else:
                             # For newer SciPy versions where mode returns a single value
-                            month_mode_values = [float(month_mode)]
+                            month_mode_values = [safe_float(month_mode)]
                     except Exception:
                         # Fallback if mode calculation fails
-                        month_mode_values = [float(month_values[0])] if month_values else [0.0]
+                        month_mode_values = [safe_float(month_values[0])] if month_values else [None]
                     
                     # Calculate average safely
                     try:
-                        month_avg = float(month_data['value'].mean())
+                        month_avg = safe_float(month_data['value'].mean())
                     except Exception:
                         month_avg = None
                     
@@ -387,7 +426,7 @@ class StatisticsView(APIView):
                     # Add to chart items
                     chart_items.append({
                         'name': param_name.name,
-                        'x': round(month_avg, 1) if month_avg else None,
+                        'x': round(month_avg, 1) if month_avg is not None else None,
                         'y': short_month_names[month - 1]
                     })
                 else:
@@ -398,7 +437,7 @@ class StatisticsView(APIView):
                         'count': 0
                     })
                     
-                    # Add null or 0 values for missing months
+                    # Add null values for missing months
                     chart_items.append({
                         'name': param_name.name,
                         'x': None,
