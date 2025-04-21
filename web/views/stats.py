@@ -681,21 +681,14 @@ class CorrelationView(APIView):
                                     }
                                 ),
                                 'year': openapi.Schema(type=openapi.TYPE_INTEGER),
-                                'period': openapi.Schema(
-                                    type=openapi.TYPE_OBJECT,
-                                    properties={
-                                        'start_date': openapi.Schema(type=openapi.TYPE_STRING),
-                                        'end_date': openapi.Schema(type=openapi.TYPE_STRING)
-                                    }
-                                ),
                                 'correlation_type': openapi.Schema(type=openapi.TYPE_STRING),
                                 'parameters': openapi.Schema(
-                                    type=openapi.TYPE_ARRAY,
-                                    items=openapi.Schema(type=openapi.TYPE_STRING)
+                                    type=openapi.TYPE_OBJECT,
+                                    additionalProperties=openapi.Schema(type=openapi.TYPE_STRING)
                                 ),
                                 'items': openapi.Schema(
-                                    type=openapi.TYPE_OBJECT,
-                                    additionalProperties=openapi.Schema(
+                                    type=openapi.TYPE_ARRAY,
+                                    items=openapi.Schema(
                                         type=openapi.TYPE_OBJECT,
                                         additionalProperties=openapi.Schema(type=openapi.TYPE_NUMBER)
                                     )
@@ -790,7 +783,8 @@ class CorrelationView(APIView):
                 datetime__lte=end_date
             ).select_related('parameter_name').values(
                 'parameter_name__id', 
-                'parameter_name__name', 
+                'parameter_name__name',
+                'parameter_name__slug',
                 'datetime', 
                 'value'
             )
@@ -799,10 +793,12 @@ class CorrelationView(APIView):
             for param in all_parameters:
                 param_id = param['parameter_name__id']
                 param_name = param['parameter_name__name']
+                param_slug = param['parameter_name__slug']
                 
                 if param_id not in param_data:
                     param_data[param_id] = {
                         'name': param_name,
+                        'slug': param_slug,
                         'data': []
                     }
                     param_names.append(param_name)
@@ -814,10 +810,13 @@ class CorrelationView(APIView):
             
             # Convert to pandas DataFrames for efficient correlation calculation
             dfs = {}
+            param_map = {}  # Map to store slug:name pairs
+            
             for param_id, data in param_data.items():
                 df = pd.DataFrame(data['data'])
                 if len(df) > 1:  # Only include parameters with multiple data points
-                    dfs[data['name']] = df.set_index('datetime')
+                    dfs[data['slug']] = df.set_index('datetime')
+                    param_map[data['slug']] = data['name']
             
             # Check again if we have enough parameters
             if len(dfs) < 2:
@@ -827,21 +826,21 @@ class CorrelationView(APIView):
                     success=False
                 )
             
-            # Create a list of parameter names based on available dataframes
-            param_names = list(dfs.keys())
+            # Create a list of parameter slugs based on available dataframes
+            param_slugs = list(dfs.keys())
             
-            # Initialize correlation matrix
-            items = {param: {p: None for p in param_names} for param in param_names}
+            # Initialize correlation dict to store results
+            correlation_result = []
             
-            # Self-correlations are always 1
-            for param in param_names:
-                items[param][param] = 1.0
-                
             # Calculate correlations between pairs
-            for i, param1 in enumerate(param_names):
-                for j, param2 in enumerate(param_names):
-                    # Skip if already calculated or self-correlation
-                    if i >= j:
+            for param1 in param_slugs:
+                param_result = {'parameter_name': param_map[param1]}
+                
+                # Self-correlation is always 1
+                param_result[param1] = 1.0
+                
+                for param2 in param_slugs:
+                    if param1 == param2:
                         continue
                     
                     # Merge the dataframes on datetime index
@@ -865,17 +864,15 @@ class CorrelationView(APIView):
                             
                             # Round to 2 decimal places
                             if not pd.isna(corr):
-                                items[param1][param2] = round(float(corr), 2)
-                                items[param2][param1] = round(float(corr), 2)
+                                param_result[param2] = round(float(corr), 2)
                             else:
-                                items[param1][param2] = 0
-                                items[param2][param1] = 0
+                                param_result[param2] = 0
                         except:
-                            items[param1][param2] = 0
-                            items[param2][param1] = 0
+                            param_result[param2] = 0
                     else:
-                        items[param1][param2] = 0
-                        items[param2][param1] = 0
+                        param_result[param2] = 0
+                
+                correlation_result.append(param_result)
             
             # Prepare response
             result = {
@@ -884,13 +881,9 @@ class CorrelationView(APIView):
                     'number': str(station.number),
                     'name': station.name
                 },
-                'period': {
-                    'start_date': (start_date + timedelta(hours=5)).isoformat(),
-                    'end_date': (end_date + timedelta(hours=5)).isoformat()
-                },
                 'correlation_type': correlation_type,
-                'parameters': param_names,
-                'items': items
+                'parameters': param_map,
+                'items': correlation_result
             }
             
             return custom_response(
