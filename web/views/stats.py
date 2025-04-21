@@ -4,7 +4,7 @@ from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from django.db.models import Avg, Min, Max, StdDev, Count, Q
 from django.utils.dateparse import parse_datetime
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import numpy as np
 import pandas as pd
 from scipy import stats
@@ -35,23 +35,9 @@ class StatisticsView(APIView):
             openapi.Parameter(
                 'year',
                 openapi.IN_QUERY,
-                description="Statistika hisoblanadigan yil (start_date va end_date o'rniga ishlatiladi)",
+                description="Statistika hisoblanadigan yil",
                 type=openapi.TYPE_INTEGER,
-                required=False
-            ),
-            openapi.Parameter(
-                'start_date',
-                openapi.IN_QUERY,
-                description="Boshlang'ich sana (UTC+5 vaqti, 'YYYY-MM-DD HH:MM:SS' formatida, year ko'rsatilmasa talab qilinadi)",
-                type=openapi.TYPE_STRING,
-                required=False
-            ),
-            openapi.Parameter(
-                'end_date',
-                openapi.IN_QUERY,
-                description="Tugash sanasi (UTC+5 vaqti, 'YYYY-MM-DD HH:MM:SS' formatida, year ko'rsatilmasa talab qilinadi)",
-                type=openapi.TYPE_STRING,
-                required=False
+                required=True
             ),
             openapi.Parameter(
                 'station_number',
@@ -88,12 +74,15 @@ class StatisticsView(APIView):
                                     },
                                     nullable=True
                                 ),
-                                'period': openapi.Schema(
+                                'year': openapi.Schema(type=openapi.TYPE_INTEGER),
+                                'summary': openapi.Schema(
                                     type=openapi.TYPE_OBJECT,
                                     properties={
-                                        'year': openapi.Schema(type=openapi.TYPE_INTEGER, nullable=True),
-                                        'start_date': openapi.Schema(type=openapi.TYPE_STRING),
-                                        'end_date': openapi.Schema(type=openapi.TYPE_STRING)
+                                        'mean': openapi.Schema(type=openapi.TYPE_STRING),
+                                        'median': openapi.Schema(type=openapi.TYPE_STRING),
+                                        'std_dev': openapi.Schema(type=openapi.TYPE_STRING),
+                                        'coefficient_of_variation': openapi.Schema(type=openapi.TYPE_NUMBER),
+                                        'trend': openapi.Schema(type=openapi.TYPE_STRING)
                                     }
                                 ),
                                 'statistics': openapi.Schema(
@@ -121,6 +110,17 @@ class StatisticsView(APIView):
                                             'count': openapi.Schema(type=openapi.TYPE_INTEGER)
                                         }
                                     )
+                                ),
+                                'items': openapi.Schema(
+                                    type=openapi.TYPE_ARRAY,
+                                    items=openapi.Schema(
+                                        type=openapi.TYPE_OBJECT,
+                                        properties={
+                                            'name': openapi.Schema(type=openapi.TYPE_STRING),
+                                            'x': openapi.Schema(type=openapi.TYPE_NUMBER),
+                                            'y': openapi.Schema(type=openapi.TYPE_STRING)
+                                        }
+                                    )
                                 )
                             }
                         ),
@@ -134,25 +134,29 @@ class StatisticsView(APIView):
         }
     )
     def get(self, request):
-        # Get query parameters
-        param_name_slug = request.query_params.get('parameter_name')
-        year_str = request.query_params.get('year')
-        start_date_str = request.query_params.get('start_date')
-        end_date_str = request.query_params.get('end_date')
-        station_number = request.query_params.get('station_number')
-        
-        # Validate parameter_name
-        if not param_name_slug:
-            return custom_response(
-                detail="parameter_name parametri talab qilinadi",
-                status_code=status.HTTP_400_BAD_REQUEST,
-                success=False
-            )
+        try:
+            # Get query parameters
+            param_name_slug = request.query_params.get('parameter_name')
+            year_str = request.query_params.get('year')
+            station_number = request.query_params.get('station_number')
             
-        # Process the date range based on parameters
-        # If year is provided, use it; otherwise, use start_date and end_date
-        selected_year = None
-        if year_str:
+            # Validate parameter_name
+            if not param_name_slug:
+                return custom_response(
+                    detail="parameter_name parametri talab qilinadi",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    success=False
+                )
+                
+            # Validate year
+            if not year_str:
+                return custom_response(
+                    detail="year parametri talab qilinadi",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    success=False
+                )
+                
+            # Process the date range based on parameters
             try:
                 selected_year = int(year_str)
                 start_date = datetime(selected_year, 1, 1) - timedelta(hours=5)  # UTC+5 to UTC
@@ -163,135 +167,180 @@ class StatisticsView(APIView):
                     status_code=status.HTTP_400_BAD_REQUEST,
                     success=False
                 )
-        else:
-            # When year is not provided, start_date and end_date are required
-            if not start_date_str or not end_date_str:
-                return custom_response(
-                    detail="year ko'rsatilmaganda start_date va end_date parametrlari talab qilinadi",
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    success=False
-                )
             
-            # Parse dates
-            start_date = parse_datetime(start_date_str)
-            if not start_date:
-                return custom_response(
-                    detail="start_date formati noto'g'ri. 'YYYY-MM-DD HH:MM:SS' formatida bo'lishi kerak",
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    success=False
-                )
-            
-            end_date = parse_datetime(end_date_str)
-            if not end_date:
-                return custom_response(
-                    detail="end_date formati noto'g'ri. 'YYYY-MM-DD HH:MM:SS' formatida bo'lishi kerak",
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    success=False
-                )
-            
-            # Convert from UTC+5 to UTC by subtracting 5 hours
-            start_date = start_date - timedelta(hours=5)
-            end_date = end_date - timedelta(hours=5)
-        
-        # Check if parameter name exists
-        try:
-            param_name = ParameterName.objects.get(slug=param_name_slug)
-        except ParameterName.DoesNotExist:
-            return custom_response(
-                detail=f"'{param_name_slug}' parametri topilmadi",
-                status_code=status.HTTP_404_NOT_FOUND,
-                success=False
-            )
-        
-        # Initialize filters
-        filters = Q(parameter_name=param_name, datetime__gte=start_date, datetime__lte=end_date)
-        
-        # If station_number is provided, filter by station
-        station = None
-        if station_number:
+            # Check if parameter name exists
             try:
-                station = Station.objects.get(number=station_number)
-                filters &= Q(station=station)
-            except Station.DoesNotExist:
+                param_name = ParameterName.objects.get(slug=param_name_slug)
+            except ParameterName.DoesNotExist:
                 return custom_response(
-                    detail=f"'{station_number}' stansiyasi topilmadi",
+                    detail=f"'{param_name_slug}' parametri topilmadi",
                     status_code=status.HTTP_404_NOT_FOUND,
                     success=False
                 )
-        
-        # Get parameters
-        parameters = Parameter.objects.filter(filters).order_by('datetime')
-        
-        # Check if parameters exist
-        if not parameters.exists():
-            return custom_response(
-                detail="Berilgan parametrlar va vaqt davri uchun ma'lumotlar topilmadi",
-                status_code=status.HTTP_404_NOT_FOUND,
-                success=False
-            )
-        
-        # Calculate basic statistics
-        values = list(parameters.values_list('value', flat=True))
-        values_df = pd.DataFrame({
-            'value': values,
-            'datetime': list(parameters.values_list('datetime', flat=True))
-        })
-        
-        # Calculate mode
-        mode_result = stats.mode(values)
-        mode_values = [float(mode_result.mode[0])]
-        
-        # Convert data for statistics
-        stats_data = {
-            'mean': float(parameters.aggregate(Avg('value'))['value__avg']),
-            'min': float(parameters.aggregate(Min('value'))['value__min']),
-            'max': float(parameters.aggregate(Max('value'))['value__max']),
-            'std_dev': float(parameters.aggregate(StdDev('value'))['value__stddev'] or 0),
-            'count': parameters.count(),
-            'median': float(np.median(values)),
-            'mode': mode_values,
-            'variance': float(np.var(values)),
-            'coefficient_of_variation': float(np.std(values) / np.mean(values)) if np.mean(values) != 0 else 0,
-        }
-        
-        # Calculate monthly mode
-        # Add UTC+5 time
-        values_df['datetime_utc5'] = values_df['datetime'] + pd.Timedelta(hours=5)
-        
-        # Extract month from datetime
-        values_df['month'] = values_df['datetime_utc5'].dt.month
-        values_df['year'] = values_df['datetime_utc5'].dt.year
-        
-        # Initialize monthly mode data
-        monthly_mode = []
-        month_names = [
-            'Yanvar', 'Fevral', 'Mart', 'Aprel', 'May', 'Iyun',
-            'Iyul', 'Avgust', 'Sentabr', 'Oktabr', 'Noyabr', 'Dekabr'
-        ]
-        
-        # Use the selected year or the most recent year in the data
-        target_year = selected_year
-        if not target_year:
-            years = sorted(values_df['year'].unique())
-            if years:
-                target_year = years[-1]
-        
-        if target_year:
-            year_data = values_df[values_df['year'] == target_year]
             
+            # Initialize filters
+            filters = Q(parameter_name=param_name, datetime__gte=start_date, datetime__lte=end_date)
+            
+            # If station_number is provided, filter by station
+            station = None
+            if station_number:
+                try:
+                    station = Station.objects.get(number=station_number)
+                    filters &= Q(station=station)
+                except Station.DoesNotExist:
+                    return custom_response(
+                        detail=f"'{station_number}' stansiyasi topilmadi",
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        success=False
+                    )
+            
+            # Get parameters
+            parameters = Parameter.objects.filter(filters).order_by('datetime')
+            
+            # Check if parameters exist
+            if not parameters.exists():
+                return custom_response(
+                    detail="Berilgan parametrlar va vaqt davri uchun ma'lumotlar topilmadi",
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    success=False
+                )
+            
+            # Calculate basic statistics
+            values = list(parameters.values_list('value', flat=True))
+            if not values:
+                return custom_response(
+                    detail="Berilgan parametrlar va vaqt davri uchun ma'lumotlar topilmadi",
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    success=False
+                )
+            
+            values_df = pd.DataFrame({
+                'value': values,
+                'datetime': list(parameters.values_list('datetime', flat=True))
+            })
+            
+            # Calculate mode (safely)
+            try:
+                mode_result = stats.mode(values)
+                # Handle different SciPy versions
+                if hasattr(mode_result, 'mode'):
+                    if isinstance(mode_result.mode, np.ndarray):
+                        mode_values = [float(m) for m in mode_result.mode]
+                    else:
+                        mode_values = [float(mode_result.mode)]
+                else:
+                    # For newer SciPy versions where mode returns a single value
+                    mode_values = [float(mode_result)]
+            except Exception:
+                # Fallback if mode calculation fails
+                mode_values = [float(values[0])] if values else [0.0]
+            
+            # Calculate mean, median, standard deviation, and coefficient of variation
+            mean_val = float(parameters.aggregate(Avg('value'))['value__avg'])
+            median_val = float(np.median(values))
+            std_dev_val = float(parameters.aggregate(StdDev('value'))['value__stddev'] or 0)
+            coef_var = float(std_dev_val / mean_val) if mean_val != 0 else 0
+            
+            # Calculate trend (Kendall's Tau) - safely
+            try:
+                from scipy.stats import kendalltau
+                x = range(len(values))
+                tau, p_value = kendalltau(x, values)
+                trend_direction = "increasing ↑" if tau > 0 else "decreasing ↓" if tau < 0 else "stable"
+            except Exception:
+                # Fallback if trend calculation fails
+                trend_direction = "stable"
+            
+            # Format summary values with appropriate units and precision
+            unit = param_name.unit or ""
+            summary = {
+                'mean': f"{round(mean_val, 1)} {unit}",
+                'median': f"{round(median_val, 1)} {unit}",
+                'std_dev': f"{round(std_dev_val, 1)} {unit}",
+                'coefficient_of_variation': round(coef_var, 2),
+                'trend': trend_direction
+            }
+            
+            # Convert data for detailed statistics
+            stats_data = {
+                'mean': mean_val,
+                'min': float(parameters.aggregate(Min('value'))['value__min']),
+                'max': float(parameters.aggregate(Max('value'))['value__max']),
+                'std_dev': std_dev_val,
+                'count': parameters.count(),
+                'median': median_val,
+                'mode': mode_values,
+                'variance': float(np.var(values)),
+                'coefficient_of_variation': coef_var,
+            }
+            
+            # Add UTC+5 time
+            values_df['datetime_utc5'] = values_df['datetime'] + pd.Timedelta(hours=5)
+            
+            # Extract month and year from datetime
+            values_df['month'] = values_df['datetime_utc5'].dt.month
+            values_df['year'] = values_df['datetime_utc5'].dt.year
+            
+            # Use the selected year
+            year_data = values_df[values_df['year'] == selected_year]
+            
+            # Initialize monthly data
+            monthly_mode = []
+            month_names = [
+                'Yanvar', 'Fevral', 'Mart', 'Aprel', 'May', 'Iyun',
+                'Iyul', 'Avgust', 'Sentabr', 'Oktabr', 'Noyabr', 'Dekabr'
+            ]
+            
+            # Short month names for chart
+            short_month_names = [
+                'Yan', 'Fev', 'Mar', 'Apr', 'May', 'Iyn',
+                'Iyl', 'Avg', 'Sen', 'Okt', 'Noy', 'Dek'
+            ]
+            
+            # Prepare chart items
+            chart_items = []
+            
+            # Calculate monthly statistics
             for month in range(1, 13):
                 month_data = year_data[year_data['month'] == month]
                 
                 if len(month_data) > 0:
                     month_values = month_data['value'].tolist()
-                    month_mode = stats.mode(month_values)
-                    month_mode_values = [float(val) for val in month_mode.mode]
+                    
+                    # Calculate mode safely
+                    try:
+                        month_mode = stats.mode(month_values)
+                        # Handle different SciPy versions
+                        if hasattr(month_mode, 'mode'):
+                            if isinstance(month_mode.mode, np.ndarray):
+                                month_mode_values = [float(m) for m in month_mode.mode]
+                            else:
+                                month_mode_values = [float(month_mode.mode)]
+                        else:
+                            # For newer SciPy versions where mode returns a single value
+                            month_mode_values = [float(month_mode)]
+                    except Exception:
+                        # Fallback if mode calculation fails
+                        month_mode_values = [float(month_values[0])] if month_values else [0.0]
+                    
+                    # Calculate average safely
+                    try:
+                        month_avg = float(month_data['value'].mean())
+                    except Exception:
+                        month_avg = 0.0
                     
                     monthly_mode.append({
                         'month': month,
                         'month_name': month_names[month - 1],
                         'mode': month_mode_values,
                         'count': len(month_data)
+                    })
+                    
+                    # Add to chart items
+                    chart_items.append({
+                        'name': param_name.name,
+                        'x': round(month_avg, 1),
+                        'y': short_month_names[month - 1]
                     })
                 else:
                     monthly_mode.append({
@@ -300,42 +349,52 @@ class StatisticsView(APIView):
                         'mode': [],
                         'count': 0
                     })
-        
-        # Prepare period information
-        period = {
-            'start_date': (start_date + timedelta(hours=5)).isoformat(),
-            'end_date': (end_date + timedelta(hours=5)).isoformat()
-        }
-        
-        # Add year to period info if selected
-        if selected_year:
-            period['year'] = selected_year
-        
-        # Prepare response
-        result = {
-            'parameter': {
-                'name': param_name.name,
-                'slug': param_name.slug,
-                'unit': param_name.unit
-            },
-            'period': period,
-            'statistics': stats_data,
-            'monthly_mode': monthly_mode
-        }
-        
-        # Add station information if provided
-        if station:
-            result['station'] = {
-                'number': str(station.number),
-                'name': station.name
+                    
+                    # Add null or 0 values for missing months
+                    chart_items.append({
+                        'name': param_name.name,
+                        'x': 0,
+                        'y': short_month_names[month - 1]
+                    })
+            
+            # Prepare response
+            result = {
+                'parameter': {
+                    'name': param_name.name,
+                    'slug': param_name.slug,
+                    'unit': param_name.unit
+                },
+                'year': selected_year,
+                'summary': summary,
+                'statistics': stats_data,
+                'monthly_mode': monthly_mode,
+                'items': chart_items
             }
-        else:
-            result['station'] = None
-        
-        return custom_response(
-            data=result,
-            status_code=status.HTTP_200_OK
-        )
+            
+            # Add station information if provided
+            if station:
+                result['station'] = {
+                    'number': str(station.number),
+                    'name': station.name
+                }
+            else:
+                result['station'] = None
+            
+            return custom_response(
+                data=result,
+                status_code=status.HTTP_200_OK
+            )
+        except Exception as e:
+            # Log the exception for debugging
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error in StatisticsView: {str(e)}")
+            
+            return custom_response(
+                detail=f"Statistikani hisoblashda xatolik yuz berdi: {str(e)}",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                success=False
+            )
 
 
 class MonthlyStatsView(APIView):
@@ -631,7 +690,7 @@ class CorrelationView(APIView):
                                     type=openapi.TYPE_ARRAY,
                                     items=openapi.Schema(type=openapi.TYPE_STRING)
                                 ),
-                                'correlation_matrix': openapi.Schema(
+                                'items': openapi.Schema(
                                     type=openapi.TYPE_OBJECT,
                                     additionalProperties=openapi.Schema(
                                         type=openapi.TYPE_OBJECT,
@@ -769,11 +828,11 @@ class CorrelationView(APIView):
             param_names = list(dfs.keys())
             
             # Initialize correlation matrix
-            correlation_matrix = {param: {p: None for p in param_names} for param in param_names}
+            items = {param: {p: None for p in param_names} for param in param_names}
             
             # Self-correlations are always 1
             for param in param_names:
-                correlation_matrix[param][param] = 1.0
+                items[param][param] = 1.0
                 
             # Calculate correlations between pairs
             for i, param1 in enumerate(param_names):
@@ -803,17 +862,17 @@ class CorrelationView(APIView):
                             
                             # Round to 2 decimal places
                             if not pd.isna(corr):
-                                correlation_matrix[param1][param2] = round(float(corr), 2)
-                                correlation_matrix[param2][param1] = round(float(corr), 2)
+                                items[param1][param2] = round(float(corr), 2)
+                                items[param2][param1] = round(float(corr), 2)
                             else:
-                                correlation_matrix[param1][param2] = 0
-                                correlation_matrix[param2][param1] = 0
+                                items[param1][param2] = 0
+                                items[param2][param1] = 0
                         except:
-                            correlation_matrix[param1][param2] = 0
-                            correlation_matrix[param2][param1] = 0
+                            items[param1][param2] = 0
+                            items[param2][param1] = 0
                     else:
-                        correlation_matrix[param1][param2] = 0
-                        correlation_matrix[param2][param1] = 0
+                        items[param1][param2] = 0
+                        items[param2][param1] = 0
             
             # Prepare response
             result = {
@@ -828,7 +887,7 @@ class CorrelationView(APIView):
                 },
                 'correlation_type': correlation_type,
                 'parameters': param_names,
-                'correlation_matrix': correlation_matrix
+                'items': items
             }
             
             return custom_response(
@@ -843,6 +902,222 @@ class CorrelationView(APIView):
             
             return custom_response(
                 detail=f"Korrelyatsiyani hisoblashda xatolik yuz berdi: {str(e)}",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                success=False
+            )
+
+
+class ModeStatsView(APIView):
+    """
+    View for retrieving mode statistics for parameters by month
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    @swagger_auto_schema(
+        tags=['Statistics'],
+        # operation_summary="Parametrlar uchun oylik moda qiymatlarini olish",
+        # operation_description="Ma'lum parametr uchun oylik moda qiymatlarini olish",
+        manual_parameters=[
+            openapi.Parameter(
+                'parameter_name',
+                openapi.IN_QUERY,
+                description="Parametr nomi",
+                type=openapi.TYPE_STRING,
+                required=True
+            ),
+            openapi.Parameter(
+                'year',
+                openapi.IN_QUERY,
+                description="Moda statistikasi hisoblanadigan yil",
+                type=openapi.TYPE_INTEGER,
+                required=True
+            ),
+            openapi.Parameter(
+                'station_number',
+                openapi.IN_QUERY,
+                description="Stansiya raqami (ixtiyoriy, ko'rsatilmasa barcha stansiyalar uchun hisoblash amalga oshiriladi)",
+                type=openapi.TYPE_STRING,
+                required=False
+            ),
+        ],
+        responses={
+            200: openapi.Response(
+                description="Moda statistikasi muvaffaqiyatli olindi",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'status': openapi.Schema(type=openapi.TYPE_INTEGER),
+                        'success': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                        'result': openapi.Schema(
+                            type=openapi.TYPE_OBJECT,
+                            properties={
+                                'items': openapi.Schema(
+                                    type=openapi.TYPE_ARRAY,
+                                    items=openapi.Schema(
+                                        type=openapi.TYPE_OBJECT,
+                                        properties={
+                                            'name': openapi.Schema(type=openapi.TYPE_STRING),
+                                            'x': openapi.Schema(type=openapi.TYPE_NUMBER),
+                                            'y': openapi.Schema(type=openapi.TYPE_STRING)
+                                        }
+                                    )
+                                )
+                            }
+                        ),
+                        'detail': openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
+                    }
+                )
+            ),
+            400: "So'rov parametrlari noto'g'ri",
+            401: f"Ruxsat mavjud emas: {AUTH_ERROR_MESSAGES['not_authenticated']}",
+            404: "Parametr nomi yoki stansiya topilmadi",
+        }
+    )
+    def get(self, request):
+        try:
+            # Get query parameters
+            param_name_slug = request.query_params.get('parameter_name')
+            year_str = request.query_params.get('year')
+            station_number = request.query_params.get('station_number')
+            
+            # Validate parameter_name
+            if not param_name_slug:
+                return custom_response(
+                    detail="parameter_name parametri talab qilinadi",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    success=False
+                )
+                
+            # Validate year
+            if not year_str:
+                return custom_response(
+                    detail="year parametri talab qilinadi",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    success=False
+                )
+                
+            # Process the date range based on parameters
+            try:
+                selected_year = int(year_str)
+                start_date = datetime(selected_year, 1, 1) - timedelta(hours=5)  # UTC+5 to UTC
+                end_date = datetime(selected_year + 1, 1, 1) - timedelta(seconds=1) - timedelta(hours=5)  # UTC+5 to UTC
+            except ValueError:
+                return custom_response(
+                    detail="year butun son bo'lishi kerak",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    success=False
+                )
+            
+            # Check if parameter name exists
+            try:
+                param_name = ParameterName.objects.get(slug=param_name_slug)
+            except ParameterName.DoesNotExist:
+                return custom_response(
+                    detail=f"'{param_name_slug}' parametri topilmadi",
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    success=False
+                )
+            
+            # Initialize filters
+            filters = Q(parameter_name=param_name, datetime__gte=start_date, datetime__lte=end_date)
+            
+            # If station_number is provided, filter by station
+            station = None
+            if station_number:
+                try:
+                    station = Station.objects.get(number=station_number)
+                    filters &= Q(station=station)
+                except Station.DoesNotExist:
+                    return custom_response(
+                        detail=f"'{station_number}' stansiyasi topilmadi",
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        success=False
+                    )
+            
+            # Get parameters
+            parameters = Parameter.objects.filter(filters).order_by('datetime')
+            
+            # Check if parameters exist
+            if not parameters.exists():
+                return custom_response(
+                    detail="Berilgan parametrlar va vaqt davri uchun ma'lumotlar topilmadi",
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    success=False
+                )
+            
+            # Create a DataFrame for processing
+            values_df = pd.DataFrame({
+                'value': list(parameters.values_list('value', flat=True)),
+                'datetime': list(parameters.values_list('datetime', flat=True))
+            })
+            
+            # Add UTC+5 time
+            values_df['datetime_utc5'] = values_df['datetime'] + pd.Timedelta(hours=5)
+            
+            # Extract month and year from datetime
+            values_df['month'] = values_df['datetime_utc5'].dt.month
+            values_df['year'] = values_df['datetime_utc5'].dt.year
+            
+            # Filter for the selected year
+            year_data = values_df[values_df['year'] == selected_year]
+            
+            # Define month names (short versions for chart)
+            short_month_names = [
+                'Yan', 'Fev', 'Mar', 'Apr', 'May', 'Iyn',
+                'Iyl', 'Avg', 'Sen', 'Okt', 'Noy', 'Dek'
+            ]
+            
+            # Initialize chart items array
+            chart_items = []
+            
+            # Calculate mode for each month
+            for month in range(1, 13):
+                month_data = year_data[year_data['month'] == month]
+                
+                if len(month_data) > 0:
+                    month_values = month_data['value'].tolist()
+                    
+                    # Calculate mode safely
+                    try:
+                        month_mode = stats.mode(month_values)
+                        # Handle different SciPy versions
+                        if hasattr(month_mode, 'mode'):
+                            if isinstance(month_mode.mode, np.ndarray):
+                                mode_value = float(month_mode.mode[0])
+                            else:
+                                mode_value = float(month_mode.mode)
+                        else:
+                            # For newer SciPy versions where mode returns a single value
+                            mode_value = float(month_mode)
+                    except Exception:
+                        # Fallback if mode calculation fails
+                        mode_value = float(month_values[0]) if month_values else 0.0
+                    
+                    # Add to chart items
+                    chart_items.append({
+                        'name': param_name.name,
+                        'x': round(mode_value, 1),
+                        'y': short_month_names[month - 1]
+                    })
+            
+            # Sort by month order
+            month_order = {name: idx for idx, name in enumerate(short_month_names)}
+            chart_items.sort(key=lambda x: month_order[x['y']])
+            
+            return custom_response(
+                data={
+                    'items': chart_items
+                },
+                status_code=status.HTTP_200_OK
+            )
+        except Exception as e:
+            # Log the exception for debugging
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error in ModeStatsView: {str(e)}")
+            
+            return custom_response(
+                detail=f"Moda statistikasini hisoblashda xatolik yuz berdi: {str(e)}",
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 success=False
             )
