@@ -211,19 +211,37 @@ class StatisticsView(APIView):
                     success=False
                 )
             
-            # Calculate basic statistics
-            values = list(parameters.values_list('value', flat=True))
+            # Handle rainfall parameter specially - filter out -1 values which represent missing data
+            is_rainfall = param_name_slug == 'rainfall'
+            
+            # Get values based on parameter type
+            if is_rainfall:
+                # For rainfall, exclude -1 values (missing data)
+                values = list(parameters.filter(value__gt=-1).values_list('value', flat=True))
+                # Get all parameters even with -1 for DataFrame (we'll filter later)
+                all_values = list(parameters.values_list('value', flat=True))
+                all_datetimes = list(parameters.values_list('datetime', flat=True))
+                values_df = pd.DataFrame({
+                    'value': all_values,
+                    'datetime': all_datetimes
+                })
+                # Filter out -1 values for calculations
+                values_df = values_df[values_df['value'] > -1]
+            else:
+                # For other parameters, use all values
+                values = list(parameters.values_list('value', flat=True))
+                values_df = pd.DataFrame({
+                    'value': values,
+                    'datetime': list(parameters.values_list('datetime', flat=True))
+                })
+            
+            # Check if filtered values exist (especially important for rainfall)
             if not values:
                 return custom_response(
                     detail="Berilgan parametrlar va vaqt davri uchun ma'lumotlar topilmadi",
                     status_code=status.HTTP_404_NOT_FOUND,
                     success=False
                 )
-            
-            values_df = pd.DataFrame({
-                'value': values,
-                'datetime': list(parameters.values_list('datetime', flat=True))
-            })
             
             # Calculate mode (safely)
             try:
@@ -242,9 +260,17 @@ class StatisticsView(APIView):
                 mode_values = [float(values[0])] if values else [0.0]
             
             # Calculate mean, median, standard deviation, and coefficient of variation
-            mean_val = float(parameters.aggregate(Avg('value'))['value__avg'])
-            median_val = float(np.median(values))
-            std_dev_val = float(parameters.aggregate(StdDev('value'))['value__stddev'] or 0)
+            if is_rainfall:
+                # For rainfall, calculate from filtered values
+                mean_val = float(np.mean(values)) if values else 0
+                median_val = float(np.median(values)) if values else 0
+                std_dev_val = float(np.std(values)) if len(values) > 1 else 0
+            else:
+                # For other parameters, use Django's aggregate functions
+                mean_val = float(parameters.aggregate(Avg('value'))['value__avg'])
+                median_val = float(np.median(values))
+                std_dev_val = float(parameters.aggregate(StdDev('value'))['value__stddev'] or 0)
+            
             coef_var = float(std_dev_val / mean_val) if mean_val != 0 else 0
             
             # Calculate trend (Kendall's Tau) - safely
@@ -252,10 +278,10 @@ class StatisticsView(APIView):
                 from scipy.stats import kendalltau
                 x = range(len(values))
                 tau, p_value = kendalltau(x, values)
-                trend_direction = "increasing ↑" if tau > 0 else "decreasing ↓" if tau < 0 else "stable"
+                trend_direction = "O'sayotgan ↑" if tau > 0 else "Pasayuvchi ↓" if tau < 0 else "Stabil"
             except Exception:
                 # Fallback if trend calculation fails
-                trend_direction = "stable"
+                trend_direction = "Stabil"
             
             # Format summary values with appropriate units and precision
             unit = param_name.unit or ""
@@ -264,19 +290,33 @@ class StatisticsView(APIView):
                 'median': f"{round(median_val, 1)} {unit}",
                 'std_dev': f"{round(std_dev_val, 1)} {unit}",
                 'coefficient_of_variation': round(coef_var, 2),
-                'trend': trend_direction
+                'trend': trend_direction,
+                'tau': tau,
+                'p_value': p_value
             }
+            
+            # Get min/max for statistics
+            if is_rainfall:
+                min_val = float(min(values)) if values else 0
+                max_val = float(max(values)) if values else 0
+                variance = float(np.var(values)) if len(values) > 1 else 0
+                count = len(values)
+            else:
+                min_val = float(parameters.aggregate(Min('value'))['value__min'])
+                max_val = float(parameters.aggregate(Max('value'))['value__max'])
+                variance = float(np.var(values))
+                count = parameters.count()
             
             # Convert data for detailed statistics
             stats_data = {
                 'mean': mean_val,
-                'min': float(parameters.aggregate(Min('value'))['value__min']),
-                'max': float(parameters.aggregate(Max('value'))['value__max']),
+                'min': min_val,
+                'max': max_val,
                 'std_dev': std_dev_val,
-                'count': parameters.count(),
+                'count': count,
                 'median': median_val,
                 'mode': mode_values,
-                'variance': float(np.var(values)),
+                'variance': variance,
                 'coefficient_of_variation': coef_var,
             }
             
