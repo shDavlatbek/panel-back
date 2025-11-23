@@ -5,7 +5,8 @@ from .views import (
     ParametersView,
     HexGridAPIView, HexagonDataAPIView, MapView,
     ParameterScrapeView, StationParametersView,
-    ParameterChartView, ParameterAvgChartView, ParameterAllChartView
+    ParameterChartView, ParameterAvgChartView, ParameterAllChartView,
+    PredictionView
 )
 from .views.stats import StatisticsView, MonthlyStatsView, CorrelationView, ModeStatsView
 
@@ -42,4 +43,7 @@ urlpatterns = [
     # path('stats/monthly', MonthlyStatsView.as_view(), name='monthly_stats'),
     path('stats/correlation', CorrelationView.as_view(), name='correlation'),
     path('stats/mode', ModeStatsView.as_view(), name='mode_stats'),
-] 
+    
+    # Prediction endpoint
+    path('prediction/<str:station_number>', PredictionView.as_view(), name='prediction'),
+]
