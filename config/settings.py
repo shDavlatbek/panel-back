@@ -28,7 +28,7 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-acdrl*#zardx^fsqt_a83
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
 ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost 127.0.0.1 [::1]').split(' ')
-
+CSRF_TRUSTED_ORIGINS = os.environ.get('CSRF_TRUSTED_ORIGINS', 'http://localhost:8080,http://localhost:5173,http://frontend:5173,http://dust.1.com.uz,https://dust.1.com.uz,http://test-dust.1.com.uz').split(',')
 
 # Application definition
 

@@ -48,6 +48,8 @@ fi
 echo "Applying database migrations..."
 python manage.py migrate
 
+python manage.py loaddata web_paramname_data_utf8.json
+
 # Create superuser if not exists
 echo "Checking for superuser..."
 python manage.py shell -c "
